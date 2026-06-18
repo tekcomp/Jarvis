@@ -1,6 +1,9 @@
-import numpy as np
 import sounddevice as sd
-import queue
+import numpy as np
+import queue   # ✅ ADD THIS
+import state
+import threading
+
 from state import state
 
 from llm import stream_llm
@@ -16,6 +19,18 @@ q = queue.Queue()
 def callback(indata, frames, time, status):
     q.put(indata.copy())
 
+def interrupt_listener():
+    def callback(indata, frames, time, status):
+        volume = np.abs(indata).mean()
+
+        # If user speaks while Jarvis is talking → STOP IMMEDIATELY
+        if volume > 0.02 and state.speaking:
+            state.stop_speaking = True
+
+    with sd.InputStream(callback=callback, channels=1, samplerate=16000):
+        while True:
+            sd.sleep(200)
+
 stream = sd.InputStream(
     samplerate=16000,
     channels=1,
@@ -28,6 +43,9 @@ buffer = []
 silence = 0
 
 print("Jarvis ONLINE (Voice Mode)")
+
+# START BACKGROUND INTERRUPT LISTENER
+threading.Thread(target=interrupt_listener, daemon=True).start()
 
 # -------------------------
 # MAIN LOOP

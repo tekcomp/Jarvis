@@ -1,22 +1,19 @@
 import sounddevice as sd
 from kokoro import KPipeline
 import state
+import threading
 
 pipeline = KPipeline(lang_code="a", device="cpu")
 VOICE = "af_heart"
 
 
-def speak(text):
+def _play_audio_stream(generator):
     state.speaking = True
     state.stop_speaking = False
 
-    print("Jarvis:", text)
-
-    generator = pipeline(text=text, voice=VOICE)
-
     for _, _, audio in generator:
 
-        # 🔥 BARGE-IN SUPPORT
+        # 🔥 BARGE-IN CHECK (THIS IS THE MAGIC)
         if state.stop_speaking:
             sd.stop()
             break
@@ -25,3 +22,12 @@ def speak(text):
         sd.wait()
 
     state.speaking = False
+
+
+def speak(text):
+    print("Jarvis:", text)
+
+    gen = pipeline(text=text, voice=VOICE)
+
+    thread = threading.Thread(target=_play_audio_stream, args=(gen,))
+    thread.start()
