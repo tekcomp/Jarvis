@@ -1,59 +1,36 @@
-import sounddevice as sd
-import numpy as np
-import queue
-
+from stt.vad import get_speech_frames
+from stt.whisper import transcribe
 from core.brain import handle
-from audio.interrupt import start as start_interrupt
 
+print("Jarvis ONLINE (Voice Mode Stable)")
 
-# -------------------------
-# AUDIO QUEUE (mic stream)
-# -------------------------
-audio_queue = queue.Queue()
-
-
-def callback(indata, frames, time, status):
-    audio_queue.put(indata.copy())
+last_text = ""
 
 
 def main():
-    print("Jarvis ONLINE (Voice Mode)")
+    global last_text
 
-    # 🔥 Start interrupt listener (barge-in system)
-    start_interrupt()
+    for audio_chunk in get_speech_frames():
 
-    # Microphone stream
-    stream = sd.InputStream(
-        samplerate=16000,
-        channels=1,
-        dtype="float32",
-        callback=callback
-    )
+        text = transcribe(audio_chunk)
 
-    buffer = []
-    silence_counter = 0
+        if not text:
+            continue
 
-    with stream:
-        while True:
-            audio = audio_queue.get().flatten()
+        text = text.strip().lower()
 
-            volume = np.abs(audio).mean()
+        # dedupe repeated STT
+        if text == last_text:
+            continue
 
-            # -------------------------
-            # SPEECH DETECTION
-            # -------------------------
-            if volume > 0.01:
-                buffer.append(audio)
-                silence_counter = 0
-            else:
-                silence_counter += 1
+        last_text = text
 
-            # -------------------------
-            # END OF SPEECH CHUNK
-            # -------------------------
-            if silence_counter > 20 and len(buffer) > 10:
-                handle(buffer)
-                buffer = []
+        print("\nHeard:", text)
+
+        response = handle(text)
+
+        if response:
+            print("Jarvis:", response)
 
 
 if __name__ == "__main__":

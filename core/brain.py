@@ -1,51 +1,39 @@
 from llm.ollama import ask_ai
-from tts.voice import speak
 
-# -------------------------
-# BRAIN HANDLER (MAIN LOGIC)
-# -------------------------
+WAKE_WORD = "jarvis"
 
-def handle(text: str):
-    """
-    Main brain entry point.
-    Receives FINAL transcribed text ONLY (never audio).
-    """
+NOISE_INPUTS = {"you", "thanks for watching", "hmm", "ok", ""}
 
-    print("DEBUG BRAIN LOADED")
 
+def handle(text: str, qa_mode: bool = False) -> str:
     if not text:
-        return
+        return ""
 
     text = text.strip().lower()
 
-    # -------------------------
-    # WAKE WORD CHECK
-    # -------------------------
-    prompt = text.replace("hey jarvis", "")
-    prompt = prompt.replace("jarvis", "")
-    prompt = prompt.strip()
+    if len(text) < 2:
+        return ""
 
-    if not prompt:
-        speak("Yes?")
-        return
+    # -----------------------------
+    # MODE SWITCH (CRITICAL FIX)
+    # -----------------------------
+    if not qa_mode:
+        if WAKE_WORD not in text:
+            return ""
 
-    # Optional cleanup: remove wake word for cleaner prompt
-    prompt = text.replace("jarvis", "").strip()
+        text = text.replace(WAKE_WORD, "").strip()
 
-    if not prompt:
-        prompt = "Yes?"
+    prompt = text
 
-    # -------------------------
-    # CALL LLM (OLLAMA)
-    # -------------------------
-    response = ask_ai(
-        f"You are Jarvis, a helpful AI assistant. "
-        f"Respond naturally and concisely.\n\nUser: {prompt}"
-    )
+    if prompt in NOISE_INPUTS:
+        return ""
 
-    print("Jarvis:", response)
+    try:
+        response = ask_ai(
+            "You are Jarvis. Be concise.\n\n"
+            f"User: {prompt}"
+        )
+    except Exception as e:
+        return f"error: {e}"
 
-    # -------------------------
-    # SPEAK RESPONSE
-    # -------------------------
-    speak(response)
+    return str(response).strip() if response else ""

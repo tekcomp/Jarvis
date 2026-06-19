@@ -26,7 +26,7 @@ def main():
 
         print("Heard:", text)
         handle(text)
-
+        output = handle(text)
 
 if __name__ == "__main__":
     main()
