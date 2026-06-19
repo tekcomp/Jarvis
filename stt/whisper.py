@@ -5,20 +5,16 @@ model = whisper.load_model("medium")
 
 def transcribe(audio):
 
-    if audio is None:
+    import numpy as np
+
+    if isinstance(audio, str):
+        return audio  # prevent crash
+
+    if audio is None or len(audio) < 1000:
         return ""
 
-    # If already numpy array from VAD → use directly
-    if isinstance(audio, np.ndarray):
-        audio_np = audio
+    audio = audio.astype(np.float32) / 32768.0
 
-    else:
-        # fallback safety
-        audio_np = np.frombuffer(audio, dtype=np.int16)
+    result = model.transcribe(audio)
 
-    # normalize for Whisper
-    audio_np = audio_np.astype("float32") / 32768.0
-
-    result = model.transcribe(audio_np)
-
-    return result["text"].strip()
+    return result.get("text", "").strip().lower()
