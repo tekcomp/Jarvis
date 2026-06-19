@@ -5,29 +5,42 @@ import state
 
 pipeline = KPipeline(lang_code="a", device="cpu")
 
+# ✅ SAFE VOICE (verified working fallback)
+VOICE = "af_heart"
 
-def _play(gen):
-    state.state.speaking = True
-    state.state.stop_speaking = False
+
+def _play(text: str):
+    if not text:
+        return
+
+    if state.state.stop_speaking:
+        return
 
     try:
-        for _, _, audio in gen:
+        gen = pipeline(text=text, voice=VOICE)
 
+        for _, _, audio in gen:
             if state.state.stop_speaking:
                 sd.stop()
-                break
+                return
 
             sd.play(audio, 24000)
             sd.wait()
 
-    finally:
-        state.state.speaking = False
+    except Exception as e:
+        print("[TTS ERROR]", e)
 
 
-def speak(text: str):
+def speak_stream(text: str):
     if not text:
         return
 
-    gen = pipeline(text=text, voice="default")
+    state.state.speaking = True
+    state.state.stop_speaking = False
 
-    threading.Thread(target=_play, args=(gen,), daemon=True).start()
+    threading.Thread(target=_play, args=(text,), daemon=True).start()
+
+
+# BACKWARD COMPAT
+def speak(text: str):
+    return speak_stream(text)

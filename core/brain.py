@@ -3,57 +3,39 @@ from tts.voice import speak
 
 WAKE_WORD = "jarvis"
 
-NOISE_INPUTS = {
-    "you",
-    "thanks for watching",
-    "hmm",
-    "uh",
-    "ok",
-    ""
-}
-
-
-def handle(text: str, qa_mode: bool = False) -> str:
+def handle(text: str):
     if not text:
         return ""
 
     text = text.strip().lower()
 
-    if len(text) < 2:
-        return ""
+    print("Heard:", text)
 
-    # --------------------------
-    # MODE 1: QA MODE (STRICT)
-    # --------------------------
-    if qa_mode:
-        prompt = text
-
-    # --------------------------
-    # MODE 2: VOICE MODE
-    # --------------------------
-    else:
-        if WAKE_WORD not in text:
-            return ""
-
+    # -------------------------
+    # CASE 1: WAKE WORD PRESENT
+    # -------------------------
+    if WAKE_WORD in text:
         prompt = text.replace(WAKE_WORD, "").strip()
 
-    # --------------------------
-    # NOISE FILTER (CRITICAL)
-    # --------------------------
-    if prompt in NOISE_INPUTS:
-        return ""
+        if not prompt:
+            prompt = "Yes?"
 
-    try:
         response = ask_ai(
-            "You are Jarvis. Respond in 1–2 short sentences.\n\n"
-            f"User: {prompt}"
+            "You are Jarvis. Be helpful, concise.\n\nUser: " + prompt
         )
-    except Exception as e:
-        return f"error: {e}"
 
-    response = str(response).strip() if response else ""
-
-    if not qa_mode:
+        print("Jarvis:", response)
         speak(response)
+        return response
 
+    # -------------------------
+    # CASE 2: DIRECT QUESTION MODE (NO WAKE WORD)
+    # -------------------------
+    # THIS FIXES YOUR PROBLEM
+    response = ask_ai(
+        "You are Jarvis. Answer concisely.\n\nUser: " + text
+    )
+
+    print("Jarvis:", response)
+    speak(response)
     return response

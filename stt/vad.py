@@ -1,13 +1,13 @@
 import webrtcvad
 import collections
-import numpy as np
 import pyaudio
-
-vad = webrtcvad.Vad(2)
+import numpy as np
 
 RATE = 16000
 FRAME_MS = 30
 FRAME_SIZE = int(RATE * FRAME_MS / 1000)
+
+vad = webrtcvad.Vad(2)
 
 audio = pyaudio.PyAudio()
 
@@ -19,33 +19,49 @@ stream = audio.open(
     frames_per_buffer=FRAME_SIZE
 )
 
-SILENCE_LIMIT = 20  # ~600ms silence
+# -----------------------------
+# FILTER SETTINGS (IMPORTANT)
+# -----------------------------
+MAX_SILENCE_FRAMES = 10
+MIN_SPEECH_FRAMES = 5
+NOISE_FILTER_MIN_LEN = 3
 
 
 def get_speech_frames():
-    voiced_frames = []
-    silence_count = 0
+    ring = collections.deque(maxlen=MAX_SILENCE_FRAMES)
+
+    voiced = []
     triggered = False
 
     while True:
         frame = stream.read(FRAME_SIZE, exception_on_overflow=False)
 
+        if len(frame) != FRAME_SIZE * 2:
+            continue
+
         is_speech = vad.is_speech(frame, RATE)
 
         if is_speech:
-            voiced_frames.append(frame)
+            voiced.append(frame)
             triggered = True
-            silence_count = 0
+            ring.clear()
 
-        else:
-            if triggered:
-                silence_count += 1
+        elif triggered:
+            ring.append(frame)
 
-                if silence_count > SILENCE_LIMIT:
-                    audio_np = np.frombuffer(b"".join(voiced_frames), dtype=np.int16)
+            # end of speech detected
+            if len(ring) >= MAX_SILENCE_FRAMES:
 
-                    voiced_frames = []
-                    triggered = False
-                    silence_count = 0
+                if len(voiced) >= MIN_SPEECH_FRAMES:
 
-                    yield audio_np
+                    audio_data = np.frombuffer(
+                        b"".join(voiced),
+                        dtype=np.int16
+                    )
+
+                    yield audio_data
+
+                # reset
+                voiced = []
+                triggered = False
+                ring.clear()
