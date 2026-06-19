@@ -1,14 +1,13 @@
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
 from core.brain import handle
+import state
 
-print("Jarvis ONLINE (Voice Mode Stable)")
-
-last_text = ""
+print("Jarvis ONLINE (REAL Voice Mode)")
 
 
 def main():
-    global last_text
+    buffer = []
 
     for audio_chunk in get_speech_frames():
 
@@ -19,18 +18,16 @@ def main():
 
         text = text.strip().lower()
 
-        # dedupe repeated STT
-        if text == last_text:
+        # dedupe
+        if text == state.state.last_text:
             continue
 
-        last_text = text
+        state.state.last_text = text
 
-        print("\nHeard:", text)
+        print("Heard:", text)
 
-        response = handle(text)
-
-        if response:
-            print("Jarvis:", response)
+        # forward immediately
+        handle(text)
 
 
 if __name__ == "__main__":

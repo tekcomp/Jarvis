@@ -1,8 +1,16 @@
 from llm.ollama import ask_ai
+from tts.voice import speak
 
 WAKE_WORD = "jarvis"
 
-NOISE_INPUTS = {"you", "thanks for watching", "hmm", "ok", ""}
+NOISE_INPUTS = {
+    "you",
+    "thanks for watching",
+    "hmm",
+    "uh",
+    "ok",
+    ""
+}
 
 
 def handle(text: str, qa_mode: bool = False) -> str:
@@ -14,26 +22,38 @@ def handle(text: str, qa_mode: bool = False) -> str:
     if len(text) < 2:
         return ""
 
-    # -----------------------------
-    # MODE SWITCH (CRITICAL FIX)
-    # -----------------------------
-    if not qa_mode:
+    # --------------------------
+    # MODE 1: QA MODE (STRICT)
+    # --------------------------
+    if qa_mode:
+        prompt = text
+
+    # --------------------------
+    # MODE 2: VOICE MODE
+    # --------------------------
+    else:
         if WAKE_WORD not in text:
             return ""
 
-        text = text.replace(WAKE_WORD, "").strip()
+        prompt = text.replace(WAKE_WORD, "").strip()
 
-    prompt = text
-
+    # --------------------------
+    # NOISE FILTER (CRITICAL)
+    # --------------------------
     if prompt in NOISE_INPUTS:
         return ""
 
     try:
         response = ask_ai(
-            "You are Jarvis. Be concise.\n\n"
+            "You are Jarvis. Respond in 1–2 short sentences.\n\n"
             f"User: {prompt}"
         )
     except Exception as e:
         return f"error: {e}"
 
-    return str(response).strip() if response else ""
+    response = str(response).strip() if response else ""
+
+    if not qa_mode:
+        speak(response)
+
+    return response
