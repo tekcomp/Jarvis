@@ -1,27 +1,24 @@
-import whisper
 import numpy as np
-import tempfile
-import wave
+import whisper
 
+model = whisper.load_model("medium")
 
-model = whisper.load_model("base")  # or "small" for better accuracy
+def transcribe(audio):
 
+    if audio is None:
+        return ""
 
-def transcribe(audio_buffer):
-    """
-    audio_buffer = list of numpy arrays from mic
-    """
+    # If already numpy array from VAD → use directly
+    if isinstance(audio, np.ndarray):
+        audio_np = audio
 
-    audio = np.concatenate(audio_buffer)
+    else:
+        # fallback safety
+        audio_np = np.frombuffer(audio, dtype=np.int16)
 
-    # Save temp wav file
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-        with wave.open(f.name, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)
-            wf.setframerate(16000)
-            wf.writeframes((audio * 32767).astype(np.int16).tobytes())
+    # normalize for Whisper
+    audio_np = audio_np.astype("float32") / 32768.0
 
-        result = model.transcribe(f.name)
+    result = model.transcribe(audio_np)
 
-    return result["text"]
+    return result["text"].strip()

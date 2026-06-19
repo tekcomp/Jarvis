@@ -23,7 +23,7 @@ def _play(gen):
 
 
 def speak(text):
-    print("Jarvis:", text)
+
     gen = pipeline(text=text, voice=config.VOICE)
 
     threading.Thread(target=_play, args=(gen,), daemon=True).start()

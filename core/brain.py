@@ -1,34 +1,51 @@
-from stt.whisper import transcribe
-from llm.ollama import stream
+from llm.ollama import ask_ai
 from tts.voice import speak
-import state
-import config
 
+# -------------------------
+# BRAIN HANDLER (MAIN LOGIC)
+# -------------------------
 
-def handle(buffer):
-    text = transcribe(buffer)
+def handle(text: str):
+    """
+    Main brain entry point.
+    Receives FINAL transcribed text ONLY (never audio).
+    """
+
+    print("DEBUG BRAIN LOADED")
 
     if not text:
         return
 
-    print("Heard:", text)
+    text = text.strip().lower()
 
-    if "stop" in text:
-        state.state.stop_speaking = True
-        return
+    # -------------------------
+    # WAKE WORD CHECK
+    # -------------------------
+    prompt = text.replace("hey jarvis", "")
+    prompt = prompt.replace("jarvis", "")
+    prompt = prompt.strip()
 
-    if any(w in text.lower() for w in config.WAKE_WORDS):
+    if not prompt:
         speak("Yes?")
         return
 
-    reply = ""
+    # Optional cleanup: remove wake word for cleaner prompt
+    prompt = text.replace("jarvis", "").strip()
 
-    for token in stream(text):
-        reply += token
+    if not prompt:
+        prompt = "Yes?"
 
-        if token.endswith(".") or token.endswith(","):
-            speak(reply)
-            reply = ""
+    # -------------------------
+    # CALL LLM (OLLAMA)
+    # -------------------------
+    response = ask_ai(
+        f"You are Jarvis, a helpful AI assistant. "
+        f"Respond naturally and concisely.\n\nUser: {prompt}"
+    )
 
-    if reply:
-        speak(reply)
+    print("Jarvis:", response)
+
+    # -------------------------
+    # SPEAK RESPONSE
+    # -------------------------
+    speak(response)

@@ -1,12 +1,11 @@
-import webrtcvad
-import numpy as np
+WAKE_WORDS = [
+    "jarvis",
+    "jervis",
+    "travis",
+    "drivers",
+    "driver"
+]
 
-vad = webrtcvad.Vad(2)
-
-def is_speech(frame_bytes, sample_rate=16000):
-    return vad.is_speech(frame_bytes, sample_rate)
-
-
-def detect_wake(text):
+def is_wake_word(text):
     text = text.lower()
-    return "jarvis" in text or "hey jarvis" in text
+    return any(w in text for w in WAKE_WORDS)

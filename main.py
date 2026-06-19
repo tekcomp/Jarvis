@@ -1,46 +1,31 @@
-import sounddevice as sd
-import numpy as np
-import queue
-
+from stt.vad import get_speech_frames
+from stt.whisper import transcribe
 from core.brain import handle
-from audio.interrupt import start as start_interrupt
 
-q = queue.Queue()
+print("Jarvis ONLINE (Voice Mode)")
 
-
-def callback(indata, frames, time, status):
-    q.put(indata.copy())
-
+last_text = ""
 
 def main():
-    print("Jarvis ONLINE")
+    global last_text
 
-    # 🔥 START INTERRUPT ENGINE
-    start_interrupt()
+    for audio_chunk in get_speech_frames():
 
-    stream = sd.InputStream(
-        samplerate=16000,
-        channels=1,
-        callback=callback
-    )
+        text = transcribe(audio_chunk)
 
-    buffer = []
-    silence = 0
+        if not text:
+            continue
 
-    with stream:
-        while True:
-            audio = q.get().flatten()
-            volume = np.abs(audio).mean()
+        text = text.strip().lower()
 
-            if volume > 0.01:
-                buffer.append(audio)
-                silence = 0
-            else:
-                silence += 1
+        # 🔥 DEDUPLICATION FIX
+        if text == last_text:
+            continue
 
-            if silence > 20 and buffer:
-                handle(buffer)
-                buffer = []
+        last_text = text
+
+        print("Heard:", text)
+        handle(text)
 
 
 if __name__ == "__main__":
