@@ -1,0 +1,9 @@
+{
+  "python.analysis.extraPaths": [
+    "."
+  ],
+  "python.analysis.autoSearchPaths": true,
+  "python.formatting.provider": "ruff",
+  "editor.formatOnSave": true,
+  "python-envs.defaultEnvManager": "ms-python.python:system"
+}

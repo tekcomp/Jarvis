@@ -3,26 +3,27 @@ import collections
 import pyaudio
 import numpy as np
 
+from core.audio_state import audio_state
+from core.logger import L3, L5, LOG_LEVEL
+
 RATE = 16000
 FRAME_MS = 30
 FRAME_SIZE = int(RATE * FRAME_MS / 1000)
 
-vad = webrtcvad.Vad(3)  # 🔥 MAX AGGRESSIVENESS (IMPORTANT)
+vad = webrtcvad.Vad(2)
 
 pa = pyaudio.PyAudio()
 
-# ----------------------------
-# DEVICE SELECTION
-# ----------------------------
+
 def pick_device():
     for i in range(pa.get_device_count()):
         info = pa.get_device_info_by_index(i)
         if info.get("maxInputChannels", 0) > 0:
             return i
-    return 0
+    return None
+
 
 DEVICE_INDEX = pick_device()
-
 
 stream = pa.open(
     format=pyaudio.paInt16,
@@ -33,23 +34,13 @@ stream = pa.open(
     frames_per_buffer=FRAME_SIZE
 )
 
-print("✔ VAD READY (NOISE FILTER V18)")
-
-
-# ----------------------------
-# QUALITY FILTER SETTINGS
-# ----------------------------
-MIN_FRAMES = 8          # must hear real speech burst
-MAX_SILENCE = 10        # stop faster (reduce junk tails)
-ENERGY_THRESHOLD = 500  # 🔥 key noise filter
-
-
-def energy(frame):
-    audio = np.frombuffer(frame, dtype=np.int16)
-    return np.abs(audio).mean()
+MAX_SILENCE = 12
+MIN_SPEECH = 6
 
 
 def get_speech_frames():
+
+    L3("VAD LOOP START")
 
     ring = collections.deque(maxlen=MAX_SILENCE)
     voiced = []
@@ -57,47 +48,44 @@ def get_speech_frames():
 
     while True:
 
-        frame = stream.read(FRAME_SIZE, exception_on_overflow=False)
-
-        if len(frame) != FRAME_SIZE * 2:
+        # 🔥 HARD ECHO BLOCK
+        if audio_state.is_blocked():
             continue
 
-        # ----------------------------
-        # 🔥 HARD ENERGY FILTER FIRST
-        # ----------------------------
-        if energy(frame) < ENERGY_THRESHOLD:
+        frame_bytes = stream.read(FRAME_SIZE, exception_on_overflow=False)
+
+        if len(frame_bytes) != FRAME_SIZE * 2:
             continue
 
-        # ----------------------------
-        # VAD CHECK
-        # ----------------------------
         try:
-            speech = vad.is_speech(frame, RATE)
+            is_speech = vad.is_speech(frame_bytes, RATE)
         except:
             continue
 
-        if speech:
-            voiced.append(frame)
-            triggered = True
+        if LOG_LEVEL >= 5:
+            L5(f"VAD speech={is_speech}")
+
+        if is_speech:
+            if not triggered:
+                L3("SPEECH START")
+                triggered = True
+
+            voiced.append(frame_bytes)
             ring.clear()
 
-        elif triggered:
-            ring.append(frame)
+        else:
+            if triggered:
+                ring.append(frame_bytes)
 
-            if len(ring) >= MAX_SILENCE:
+                if len(ring) >= MAX_SILENCE:
 
-                # ----------------------------
-                # 🔥 QUALITY GATE BEFORE WHISPER
-                # ----------------------------
-                if len(voiced) >= MIN_FRAMES:
+                    if len(voiced) >= MIN_SPEECH:
+                        L3(f"SPEECH END frames={len(voiced)}")
+                        print("[VAD] YIELDING AUDIO")
+                        audio = np.frombuffer(b"".join(voiced), dtype=np.int16)
+                        print("[VAD] YIELDING AUDIO")
+                        yield audio
 
-                    audio = np.frombuffer(
-                        b"".join(voiced),
-                        dtype=np.int16
-                    )
-
-                    yield audio
-
-                voiced = []
-                triggered = False
-                ring.clear()
+                    voiced = []
+                    triggered = False
+                    ring.clear()
