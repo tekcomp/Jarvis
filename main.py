@@ -4,70 +4,113 @@ from core.brain import handle
 from tts.voice import speak
 import state
 import time
+import re
 
-print("Jarvis ONLINE CORE v6 (CLEAN LOOP)")
+print("Jarvis ONLINE CORE v9 (SEMANTIC STABILIZER)")
+print("LISTENING...")
 
 
+# -----------------------------
+# CLEAN INPUT
+# -----------------------------
+def clean(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"\bjarvis\b", "", text)
+    text = re.sub(r"[^\w\s]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+# -----------------------------
+# SEMANTIC NORMALIZER
+# -----------------------------
+def normalize(text: str) -> str:
+    text = clean(text)
+
+    # reduce semantic duplicates
+    replacements = {
+        "what is the time": "time",
+        "what time is it": "time",
+        "tell me a joke": "joke",
+        "give me a joke": "joke",
+        "hello": "hello",
+    }
+
+    return replacements.get(text, text)
+
+
+# -----------------------------
+# FILTER
+# -----------------------------
 def is_valid(text: str) -> bool:
     if not text:
         return False
-
-    text = text.strip().lower()
-
-    noise = {
-        "thanks for watching",
-        "you",
-        "hmm",
-        "uh",
-        "",
-        "undefined"
-    }
-
     if len(text) < 2:
         return False
+    return True
 
-    return text not in noise
 
-
+# -----------------------------
+# MAIN LOOP
+# -----------------------------
 def main():
-    last = ""
-    cooldown_until = 0
 
-    print("LISTENING...")
+    last_intent = ""
+    last_time = 0
+    COOLDOWN = 2.0
 
     for audio in get_speech_frames():
 
-        if state.state.speaking:
-            continue
+        try:
+            text = transcribe(audio)
 
-        text = transcribe(audio)
+            if not is_valid(text):
+                continue
 
-        if not is_valid(text):
-            continue
+            print("Heard:", text)
 
-        text = text.strip().lower()
+            cleaned = normalize(text)
 
-        # cooldown after speech
-        if time.time() < cooldown_until:
-            continue
+            # -----------------------------
+            # WAKE CHECK
+            # -----------------------------
+            if "jarvis" not in text.lower():
+                continue
 
-        if text == last:
-            continue
+            # -----------------------------
+            # COOLDOWN (anti double trigger)
+            # -----------------------------
+            now = time.time()
+            if now - last_time < COOLDOWN:
+                continue
 
-        last = text
+            last_time = now
 
-        print("Heard:", text)
+            # -----------------------------
+            # SEMANTIC DEDUP
+            # -----------------------------
+            intent = cleaned
 
-        response = handle(text)
+            if intent == last_intent:
+                continue
 
-        if not response:
-            continue
+            last_intent = intent
 
-        print("Jarvis:", response)
+            print("COMMAND:", intent)
 
-        speak(response)
+            response = handle(intent)
 
-        cooldown_until = time.time() + 1.2
+            if not response:
+                continue
+
+            print("Jarvis:", response)
+
+            state.state.speaking = True
+            speak(response)
+            state.state.speaking = False
+
+        except Exception as e:
+            print("[ERROR]", e)
 
 
 if __name__ == "__main__":
