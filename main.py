@@ -3,114 +3,109 @@ from stt.whisper import transcribe
 from core.brain import handle
 from tts.voice import speak
 import state
-import time
-import re
 
-print("Jarvis ONLINE CORE v9 (SEMANTIC STABILIZER)")
-print("LISTENING...")
+print("Jarvis ONLINE CORE v12 (CLEAN FULL REPLACE)")
 
-
-# -----------------------------
-# CLEAN INPUT
-# -----------------------------
-def clean(text: str) -> str:
-    text = text.lower()
-    text = re.sub(r"\bjarvis\b", "", text)
-    text = re.sub(r"[^\w\s]", " ", text)
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
+# ----------------------------
+# STATE
+# ----------------------------
+last_text = ""
 
 
-# -----------------------------
-# SEMANTIC NORMALIZER
-# -----------------------------
-def normalize(text: str) -> str:
-    text = clean(text)
-
-    # reduce semantic duplicates
-    replacements = {
-        "what is the time": "time",
-        "what time is it": "time",
-        "tell me a joke": "joke",
-        "give me a joke": "joke",
-        "hello": "hello",
-    }
-
-    return replacements.get(text, text)
-
-
-# -----------------------------
+# ----------------------------
 # FILTER
-# -----------------------------
-def is_valid(text: str) -> bool:
-    if not text:
-        return False
+# ----------------------------
+NOISE = {
+    "thank you",
+    "thanks",
+    "thanks for watching",
+    "bye",
+    "ok",
+    "okay",
+    "",
+    " "
+}
+
+
+def is_noise(text: str) -> bool:
+    text = text.strip().lower()
+    return text in NOISE
+
+
+def is_command(text: str) -> bool:
+    t = text.lower()
+    return (
+        "jarvis" in t or
+        "hey" in t or
+        "what" in t or
+        "how" in t or
+        "tell me" in t
+    )
+
+
+def clean_command(text: str) -> str:
+    text = text.lower()
+    text = text.replace("jarvis", "")
+    text = text.replace("hey", "")
+    text = text.strip()
+
     if len(text) < 2:
-        return False
-    return True
+        return ""
+
+    return text
 
 
-# -----------------------------
+# ----------------------------
 # MAIN LOOP
-# -----------------------------
+# ----------------------------
 def main():
 
-    last_intent = ""
-    last_time = 0
-    COOLDOWN = 2.0
+    global last_text
+
+    print("LISTENING...")
 
     for audio in get_speech_frames():
 
-        try:
-            text = transcribe(audio)
+        text = transcribe(audio)
 
-            if not is_valid(text):
-                continue
+        if not text:
+            continue
 
-            print("Heard:", text)
+        if is_noise(text):
+            continue
 
-            cleaned = normalize(text)
+        text = text.strip().lower()
 
-            # -----------------------------
-            # WAKE CHECK
-            # -----------------------------
-            if "jarvis" not in text.lower():
-                continue
+        if text == last_text:
+            continue
 
-            # -----------------------------
-            # COOLDOWN (anti double trigger)
-            # -----------------------------
-            now = time.time()
-            if now - last_time < COOLDOWN:
-                continue
+        last_text = text
 
-            last_time = now
+        print("Heard:", text)
 
-            # -----------------------------
-            # SEMANTIC DEDUP
-            # -----------------------------
-            intent = cleaned
+        # ----------------------------
+        # INTENT GATE
+        # ----------------------------
+        if not is_command(text):
+            continue
 
-            if intent == last_intent:
-                continue
+        command = clean_command(text)
 
-            last_intent = intent
+        if not command:
+            continue
 
-            print("COMMAND:", intent)
+        print("COMMAND:", command)
 
-            response = handle(intent)
+        response = handle(command)
 
-            if not response:
-                continue
+        if not response:
+            continue
 
-            print("Jarvis:", response)
+        print("Jarvis:", response)
 
-            state.state.speaking = True
-            speak(response)
-            state.state.speaking = False
-
-        except Exception as e:
-            print("[ERROR]", e)
+        state.state.speaking = True
+        speak(response)
+        state.state.speaking = False
 
 
 if __name__ == "__main__":

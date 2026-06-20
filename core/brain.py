@@ -1,4 +1,6 @@
+from datetime import datetime
 import re
+
 
 def clean(text: str) -> str:
     text = text.lower()
@@ -7,20 +9,40 @@ def clean(text: str) -> str:
 
 
 def handle(text: str) -> str:
+
     text = clean(text)
 
-    if not text:
-        return ""
-
+    # -----------------------
+    # WAKE WORD
+    # -----------------------
     if "jarvis" in text:
-        if "joke" in text:
-            return "Why did the AI cross the road? To optimize the reward function."
-        if "time" in text:
-            from datetime import datetime
-            return f"The time is {datetime.now().strftime('%H:%M')}."
-        if "hello" in text:
-            return "Hello, I am online."
-
         return "Yes sir."
 
-    return ""
+    # -----------------------
+    # TIME
+    # -----------------------
+    if "time" in text:
+        return f"The time is {datetime.now().strftime('%H:%M')}."
+
+    # -----------------------
+    # DATE
+    # -----------------------
+    if "date" in text or "today" in text:
+        return f"Today is {datetime.now().strftime('%A %B %d')}."
+
+    # -----------------------
+    # CAPITAL OF FLORIDA
+    # -----------------------
+    if "capital" in text and "florida" in text:
+        return "The capital of Florida is Tallahassee."
+
+    # -----------------------
+    # JOKE
+    # -----------------------
+    if "joke" in text:
+        return "Why did the AI cross the road? To optimize the reward function."
+
+    # -----------------------
+    # FALLBACK
+    # -----------------------
+    return "I didn't understand that."
