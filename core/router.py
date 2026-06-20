@@ -6,6 +6,7 @@ COMMANDS = [
     (["joke"], commands.cmd_joke),
     (["capital"], commands.cmd_capital),
     (["hello", "hi"], commands.cmd_hello),
+    (["bye", "goodbye"], commands.cmd_bye),
     (["weather"], commands.cmd_weather),
     (["news"], commands.cmd_news),
 ]

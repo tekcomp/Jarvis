@@ -21,6 +21,9 @@ def cmd_capital(text):
 def cmd_hello(text):
     return "Hello sir, I am online."
 
+def cmd_bye(text):
+    return "Goodbye sir, have a great day."
+
 def cmd_weather(text):
     return "Weather module not connected yet."
 

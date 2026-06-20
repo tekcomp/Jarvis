@@ -1,146 +1,133 @@
-from stt.vad import get_speech_frames
+import signal
+import sys
+from datetime import datetime
+
+from stt.vad import get_speech_frames, pa, stream
 from stt.whisper import transcribe
 from core.brain import handle
 from tts.voice import speak
 import state
-from datetime import datetime
-
-print("Jarvis ONLINE CORE (STABLE V17.2 CLEAN REBUILD)")
 
 
 # ----------------------------
-# CLEAN TEXT UTILITIES
+# DEBUG MODE
 # ----------------------------
-
-def clean_text(text: str) -> str:
-    if not text:
-        return ""
-
-    text = text.lower().strip()
-
-    # remove wake word early (CRITICAL FIX)
-    text = text.replace("jarvis", "")
-    text = text.replace("hey", "")
-    text = text.replace(",", " ")
-
-    # normalize spacing
-    text = " ".join(text.split())
-
-    return text
+DEBUG = True
 
 
+def log(tag, msg):
+    if DEBUG:
+        time = datetime.now().strftime("%H:%M:%S")
+        print(f"[{time}] {tag}: {msg}")
+
+
+# ----------------------------
+# CLEAN SHUTDOWN
+# ----------------------------
+def shutdown(sig=None, frame=None):
+    print("\n[SYS] Shutting down Jarvis safely...")
+
+    try:
+        state.state.speaking = False
+        stream.stop_stream()
+        stream.close()
+        pa.terminate()
+    except:
+        pass
+
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, shutdown)
+signal.signal(signal.SIGTERM, shutdown)
+
+
+# ----------------------------
+# FILTER
+# ----------------------------
 def is_valid(text: str) -> bool:
     if not text:
         return False
 
-    text = text.strip()
+    text = text.strip().lower()
 
-    if len(text) < 4:
+    if len(text) < 2:
         return False
 
-    # reject garbage fragments
-    junk = [
+    noise = {
         "thanks for watching",
-        "thank you very much",
-        "the time is",
-        "i see a couple",
-        "music",
-        "applause"
-    ]
+        "thank you for watching",
+        "...",
+        "undefined"
+    }
 
-    t = text.lower()
-    for j in junk:
-        if j in t:
-            return False
-
-    # reject ultra-fragmented speech
-    if len(text.split()) < 2:
-        return False
-
-    return True
-
-
-def safe_handle(text: str) -> str:
-    """
-    Brain wrapper with full safety protection
-    """
-    try:
-        if not text:
-            return "I didn't hear anything clearly."
-
-        return handle(text)
-
-    except Exception as e:
-        print("[MAIN ERROR]", e)
-        return "I couldn't process that request."
+    return text not in noise
 
 
 # ----------------------------
 # MAIN LOOP
 # ----------------------------
-
 def main():
 
     last_text = ""
 
-    print("LISTENING...")
+    log("SYSTEM", "Jarvis Debug Mode Started")
 
     for audio in get_speech_frames():
 
         try:
 
+            # ------------------------
+            # WHISPER STAGE
+            # ------------------------
             text = transcribe(audio)
+            log("WHISPER", text)
 
             if not is_valid(text):
+                log("FILTER", "Rejected noise")
                 continue
 
-            text = clean_text(text)
+            text = text.strip().lower()
 
-            if not text:
-                continue
-
-            # prevent duplicate execution
             if text == last_text:
+                log("FILTER", "Duplicate ignored")
+                continue
+
+            if state.state.speaking:
+                log("STATE", "Speaking active - skipping")
                 continue
 
             last_text = text
 
-            print("Heard:", text)
-
-            # ----------------------------
-            # ROUTING DECISION LAYER
-            # ----------------------------
-
-            # wake-only filtering
-            if len(text) < 2:
+            # ------------------------
+            # WAKE FILTER
+            # ------------------------
+            if "jarvis" not in text and "hey" not in text:
+                log("WAKE", f"Ignored: {text}")
                 continue
 
-            # ----------------------------
-            # EXECUTE BRAIN
-            # ----------------------------
+            log("INPUT", text)
 
-            response = safe_handle(text)
+            # ------------------------
+            # BRAIN
+            # ------------------------
+            response = handle(text)
 
             if not response:
                 response = "I didn't understand that."
 
-            print("Jarvis:", response)
+            log("JARVIS", response)
 
-            # ----------------------------
-            # SPEAK SAFETY LOCK
-            # ----------------------------
-
+            # ------------------------
+            # TTS
+            # ------------------------
             state.state.speaking = True
             speak(response)
             state.state.speaking = False
 
         except Exception as e:
-            print("[LOOP ERROR]", e)
+            log("ERROR", str(e))
 
-
-# ----------------------------
-# ENTRY POINT
-# ----------------------------
 
 if __name__ == "__main__":
     main()
