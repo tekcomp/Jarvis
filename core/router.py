@@ -1,21 +1,22 @@
-NOISE = {"you", "thanks for watching", "hmm", "uh", "ok", ""}
+from core import commands
 
-WAKE_WORD = "jarvis"
+COMMANDS = [
+    (["time"], commands.cmd_time),
+    (["date", "today"], commands.cmd_date),
+    (["joke"], commands.cmd_joke),
+    (["capital"], commands.cmd_capital),
+    (["hello", "hi"], commands.cmd_hello),
+    (["weather"], commands.cmd_weather),
+    (["news"], commands.cmd_news),
+]
 
 
-def should_respond(text: str, mode: str):
-    text = text.strip().lower()
+def route(text: str):
+    text = text.lower()
 
-    if len(text) < 2:
-        return False, ""
+    for keywords, func in COMMANDS:
+        for k in keywords:
+            if k in text:
+                return func(text)
 
-    if mode == "voice":
-        if WAKE_WORD not in text:
-            return False, ""
-
-        text = text.replace(WAKE_WORD, "").strip()
-
-    if text in NOISE:
-        return False, ""
-
-    return True, text
+    return commands.cmd_fallback(text)
