@@ -9,7 +9,11 @@ VOICE = "af_heart"
 
 
 def _play(text: str):
+    if not text:
+        return
+
     try:
+        # HARD AUDIO GATE (CRITICAL FIX)
         state.state.speaking = True
         state.state.ignore_audio = True
 
@@ -20,13 +24,12 @@ def _play(text: str):
             sd.wait()
 
     finally:
-        time.sleep(0.4)
+        # small cooldown to flush mic echo
+        time.sleep(0.6)
+
         state.state.speaking = False
         state.state.ignore_audio = False
 
 
 def speak(text: str):
-    if not text:
-        return
-
     threading.Thread(target=_play, args=(text,), daemon=True).start()

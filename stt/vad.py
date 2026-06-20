@@ -2,23 +2,31 @@ import webrtcvad
 import collections
 import pyaudio
 import numpy as np
-import threading
+import time
+import state
 
 RATE = 16000
 FRAME_MS = 30
 FRAME_SIZE = int(RATE * FRAME_MS / 1000)
 
 vad = webrtcvad.Vad(2)
+
 pa = pyaudio.PyAudio()
+
 
 def pick_device():
     for i in range(pa.get_device_count()):
         info = pa.get_device_info_by_index(i)
         if info.get("maxInputChannels", 0) > 0:
             return i
-    return 0
+    return None
+
 
 DEVICE_INDEX = pick_device()
+
+print(f"✔ MIC DEVICE: {DEVICE_INDEX}")
+print("✔ VAD READY (CLEAN CUT V17.1)")
+
 
 stream = pa.open(
     format=pyaudio.paInt16,
@@ -29,79 +37,78 @@ stream = pa.open(
     frames_per_buffer=FRAME_SIZE
 )
 
-print("✔ VAD READY (V11 SAFE)")
+
+# -------------------------
+# CRITICAL FIX PARAMETERS
+# -------------------------
+PRE_ROLL = 5            # smaller buffer = less bleed-in
+END_SILENCE = 10        # faster cutoff (IMPORTANT FIX)
+MIN_AUDIO = 12
 
 
-# -----------------------------
-# CONTROL FLAG (CLEAN STOP)
-# -----------------------------
-_running = True
-
-
-def stop_vad():
-    global _running
-    _running = False
-
-
-# -----------------------------
-# MAIN LOOP
-# -----------------------------
 def get_speech_frames():
 
-    global _running
-
-    ring = collections.deque(maxlen=20)
+    ring = collections.deque(maxlen=PRE_ROLL)
     voiced = []
+    silence_count = 0
     triggered = False
 
-    try:
-        while _running:
+    print("LISTENING...")
 
-            try:
-                frame = stream.read(FRAME_SIZE, exception_on_overflow=False)
-            except Exception:
+    while True:
+
+        try:
+
+            if state.state.ignore_audio:
+                time.sleep(0.01)
                 continue
+
+            frame = stream.read(FRAME_SIZE, exception_on_overflow=False)
 
             if len(frame) != FRAME_SIZE * 2:
                 continue
 
-            try:
-                speech = vad.is_speech(frame, RATE)
-            except:
-                continue
+            speech = vad.is_speech(frame, RATE)
 
             if speech:
-                voiced.append(frame)
-                triggered = True
-                ring.clear()
 
-            elif triggered:
+                if not triggered:
+                    voiced.extend(list(ring))  # pre-roll capture
+                    triggered = True
+
+                voiced.append(frame)
+                silence_count = 0
                 ring.append(frame)
 
-                if len(ring) >= 15:
+            else:
 
-                    if len(voiced) > 8:
+                if triggered:
+                    silence_count += 1
 
-                        audio = np.frombuffer(
-                            b"".join(voiced),
-                            dtype=np.int16
-                        )
+                    # append only very small tail (CRITICAL FIX)
+                    if silence_count < END_SILENCE:
+                        voiced.append(frame)
 
-                        yield audio
+                    if silence_count >= END_SILENCE:
 
-                    voiced = []
-                    triggered = False
-                    ring.clear()
+                        if len(voiced) >= MIN_AUDIO:
 
-    except KeyboardInterrupt:
-        print("\n🛑 VAD STOPPED CLEANLY")
-        stop_vad()
-        return
+                            # 🔥 TRIM LAST 200ms (removes Whisper garbage tail)
+                            trim_frames = int(0.2 * RATE / FRAME_SIZE)
+                            cleaned = voiced[:-trim_frames] if len(voiced) > trim_frames else voiced
 
-    finally:
-        try:
-            stream.stop_stream()
-            stream.close()
-        except:
-            pass
-        pa.terminate()
+                            audio = np.frombuffer(b"".join(cleaned), dtype=np.int16)
+                            yield audio
+
+                        # reset
+                        voiced = []
+                        silence_count = 0
+                        triggered = False
+                        ring.clear()
+
+                else:
+                    ring.append(frame)
+
+        except Exception as e:
+            print("VAD ERROR:", e)
+            time.sleep(0.1)

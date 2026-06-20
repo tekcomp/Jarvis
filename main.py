@@ -3,110 +3,144 @@ from stt.whisper import transcribe
 from core.brain import handle
 from tts.voice import speak
 import state
+from datetime import datetime
 
-print("Jarvis ONLINE CORE v12 (CLEAN FULL REPLACE)")
-
-# ----------------------------
-# STATE
-# ----------------------------
-last_text = ""
+print("Jarvis ONLINE CORE (STABLE V17.2 CLEAN REBUILD)")
 
 
 # ----------------------------
-# FILTER
+# CLEAN TEXT UTILITIES
 # ----------------------------
-NOISE = {
-    "thank you",
-    "thanks",
-    "thanks for watching",
-    "bye",
-    "ok",
-    "okay",
-    "",
-    " "
-}
 
-
-def is_noise(text: str) -> bool:
-    text = text.strip().lower()
-    return text in NOISE
-
-
-def is_command(text: str) -> bool:
-    t = text.lower()
-    return (
-        "jarvis" in t or
-        "hey" in t or
-        "what" in t or
-        "how" in t or
-        "tell me" in t
-    )
-
-
-def clean_command(text: str) -> str:
-    text = text.lower()
-    text = text.replace("jarvis", "")
-    text = text.replace("hey", "")
-    text = text.strip()
-
-    if len(text) < 2:
+def clean_text(text: str) -> str:
+    if not text:
         return ""
 
+    text = text.lower().strip()
+
+    # remove wake word early (CRITICAL FIX)
+    text = text.replace("jarvis", "")
+    text = text.replace("hey", "")
+    text = text.replace(",", " ")
+
+    # normalize spacing
+    text = " ".join(text.split())
+
     return text
+
+
+def is_valid(text: str) -> bool:
+    if not text:
+        return False
+
+    text = text.strip()
+
+    if len(text) < 4:
+        return False
+
+    # reject garbage fragments
+    junk = [
+        "thanks for watching",
+        "thank you very much",
+        "the time is",
+        "i see a couple",
+        "music",
+        "applause"
+    ]
+
+    t = text.lower()
+    for j in junk:
+        if j in t:
+            return False
+
+    # reject ultra-fragmented speech
+    if len(text.split()) < 2:
+        return False
+
+    return True
+
+
+def safe_handle(text: str) -> str:
+    """
+    Brain wrapper with full safety protection
+    """
+    try:
+        if not text:
+            return "I didn't hear anything clearly."
+
+        return handle(text)
+
+    except Exception as e:
+        print("[MAIN ERROR]", e)
+        return "I couldn't process that request."
 
 
 # ----------------------------
 # MAIN LOOP
 # ----------------------------
+
 def main():
 
-    global last_text
+    last_text = ""
 
     print("LISTENING...")
 
     for audio in get_speech_frames():
 
-        text = transcribe(audio)
+        try:
 
-        if not text:
-            continue
+            text = transcribe(audio)
 
-        if is_noise(text):
-            continue
+            if not is_valid(text):
+                continue
 
-        text = text.strip().lower()
+            text = clean_text(text)
 
-        if text == last_text:
-            continue
+            if not text:
+                continue
 
-        last_text = text
+            # prevent duplicate execution
+            if text == last_text:
+                continue
 
-        print("Heard:", text)
+            last_text = text
 
-        # ----------------------------
-        # INTENT GATE
-        # ----------------------------
-        if not is_command(text):
-            continue
+            print("Heard:", text)
 
-        command = clean_command(text)
+            # ----------------------------
+            # ROUTING DECISION LAYER
+            # ----------------------------
 
-        if not command:
-            continue
+            # wake-only filtering
+            if len(text) < 2:
+                continue
 
-        print("COMMAND:", command)
+            # ----------------------------
+            # EXECUTE BRAIN
+            # ----------------------------
 
-        response = handle(command)
+            response = safe_handle(text)
 
-        if not response:
-            continue
+            if not response:
+                response = "I didn't understand that."
 
-        print("Jarvis:", response)
+            print("Jarvis:", response)
 
-        state.state.speaking = True
-        speak(response)
-        state.state.speaking = False
+            # ----------------------------
+            # SPEAK SAFETY LOCK
+            # ----------------------------
 
+            state.state.speaking = True
+            speak(response)
+            state.state.speaking = False
+
+        except Exception as e:
+            print("[LOOP ERROR]", e)
+
+
+# ----------------------------
+# ENTRY POINT
+# ----------------------------
 
 if __name__ == "__main__":
     main()
