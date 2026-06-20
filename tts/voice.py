@@ -7,9 +7,11 @@ import time
 pipeline = KPipeline(lang_code="a", device="cpu")
 VOICE = "af_heart"
 
+
 def _play(text: str):
     try:
-        state.state.ignore_audio = True   # 🔥 BLOCK MIC DURING SPEAKING
+        state.state.speaking = True
+        state.state.ignore_audio = True
 
         gen = pipeline(text=text, voice=VOICE)
 
@@ -18,14 +20,13 @@ def _play(text: str):
             sd.wait()
 
     finally:
-        time.sleep(0.5)
-        state.state.ignore_audio = False
+        time.sleep(0.4)
         state.state.speaking = False
+        state.state.ignore_audio = False
 
 
 def speak(text: str):
     if not text:
         return
 
-    state.state.speaking = True
     threading.Thread(target=_play, args=(text,), daemon=True).start()

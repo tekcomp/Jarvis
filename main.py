@@ -3,14 +3,9 @@ from stt.whisper import transcribe
 from core.brain import handle
 from tts.voice import speak
 import state
+import time
 
-print("Jarvis ONLINE (STABLE LOOP V4)")
-
-# ----------------------------
-# LOCAL SAFETY STATE
-# ----------------------------
-last_text = ""
-system_lock = False   # prevents echo loops
+print("Jarvis ONLINE CORE v6 (CLEAN LOOP)")
 
 
 def is_valid(text: str) -> bool:
@@ -19,79 +14,61 @@ def is_valid(text: str) -> bool:
 
     text = text.strip().lower()
 
+    noise = {
+        "thanks for watching",
+        "you",
+        "hmm",
+        "uh",
+        "",
+        "undefined"
+    }
+
     if len(text) < 2:
         return False
-
-    noise = {
-        "you", "uh", "hmm", "thanks for watching",
-        " ", "...", "undefined"
-    }
 
     return text not in noise
 
 
-# ----------------------------
-# MAIN LOOP
-# ----------------------------
 def main():
+    last = ""
+    cooldown_until = 0
 
-    global last_text, system_lock
-
-    print("VAD LOOP STARTED (LISTENING...)")
+    print("LISTENING...")
 
     for audio in get_speech_frames():
 
-        try:
-            text = transcribe(audio)
+        if state.state.speaking:
+            continue
 
-            if not is_valid(text):
-                continue
+        text = transcribe(audio)
 
-            text = text.strip().lower()
+        if not is_valid(text):
+            continue
 
-            # 🔒 prevent duplicate triggers
-            if text == last_text:
-                continue
+        text = text.strip().lower()
 
-            # 🔒 prevent self echo
-            if state.state.speaking:
-                continue
+        # cooldown after speech
+        if time.time() < cooldown_until:
+            continue
 
-            last_text = text
+        if text == last:
+            continue
 
-            print("Heard:", text)
+        last = text
 
-            # ----------------------------
-            # WAKE FILTER (optional safety)
-            # ----------------------------
-            if "jarvis" not in text and "hey" not in text:
-                continue
+        print("Heard:", text)
 
-            # ----------------------------
-            # PROCESS BRAIN
-            # ----------------------------
-            response = handle(text)
+        response = handle(text)
 
-            if not response:
-                response = "I didn't understand that."
+        if not response:
+            continue
 
-            print("Jarvis:", response)
+        print("Jarvis:", response)
 
-            # ----------------------------
-            # SPEAK (LOCKED)
-            # ----------------------------
-            state.state.speaking = True
-            speak(response)
+        speak(response)
 
-            # give TTS time to finish (prevents echo loop)
-            state.state.speaking = False
-
-        except Exception as e:
-            print("[MAIN LOOP ERROR]", e)
+        cooldown_until = time.time() + 1.2
 
 
-# ----------------------------
-# ENTRY POINT
-# ----------------------------
 if __name__ == "__main__":
     main()
