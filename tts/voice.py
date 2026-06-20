@@ -1,55 +1,38 @@
 import time
-import threading
 import sounddevice as sd
 
 from core.logger import L3
-from .engine import synthesize_audio
-
-_is_speaking = False
-_lock = threading.Lock()
+from core.duplex_guard import duplex
+from tts.engine import synthesize_audio
 
 
-def is_speaking():
-    return _is_speaking
+SAMPLE_RATE = 24000
 
 
 def speak(text: str):
-    global _is_speaking
 
     if not text:
         return
 
-    with _lock:
-        _is_speaking = True
+    L3(f"TTS START: {text}")
+
+    # activate echo suppression window
+    duplex.start(hold_seconds=1.8)
 
     try:
-        L3(f"TTS START: {text}")
-
         audio = synthesize_audio(text)
 
         _play(audio)
 
     finally:
-        with _lock:
-            _is_speaking = False
-
+        duplex.stop()
         L3("TTS END")
 
 
 def _play(audio):
-    global _is_speaking
 
-    try:
-        with _lock:
-            _is_speaking = True
+    # small buffer to prevent immediate re-capture
+    time.sleep(0.05)
 
-        # hard stop any overlapping audio
-        sd.stop()
-
-        # play audio (blocking = stable for VAD systems)
-        sd.play(audio, samplerate=24000)
-        sd.wait()
-
-    finally:
-        with _lock:
-            _is_speaking = False
+    sd.play(audio, samplerate=SAMPLE_RATE)
+    sd.wait()

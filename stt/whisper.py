@@ -1,14 +1,16 @@
 import numpy as np
 import whisper
 
-from core.logger import L3, L5, LOG_LEVEL
+from core.logger import L3, LOG_LEVEL
+from core.duplex_guard import duplex
 
 model = whisper.load_model("medium")
 
 
 def transcribe(audio):
 
-    if isinstance(audio, str):
+    # 🔥 ignore TTS echo window
+    if duplex.muted():
         return ""
 
     if audio is None or len(audio) < 1000:
@@ -23,8 +25,7 @@ def transcribe(audio):
         L3("WHISPER EMPTY RESULT")
         return ""
 
-    # debug logging (only when enabled)
-    if LOG_LEVEL >= 5:
-        L5(f"WHISPER RAW: {text}")
+    if LOG_LEVEL >= 3:
+        L3(f"WHISPER: {text}")
 
     return text

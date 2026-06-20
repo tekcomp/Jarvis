@@ -1,67 +1,87 @@
-from core.intent import score_intent
 from datetime import datetime
 
+WAKE_WORD = "jarvis"
 
-def fallback_response(text: str) -> str:
+active = False
+
+
+def _clean(text: str) -> str:
     """
-    Tier 3: conversational fallback (NOT command execution)
+    Removes wake word + cleans punctuation noise
     """
+    text = text.lower().strip()
 
-    text = text.lower()
+    # remove wake word cleanly (not just detect it)
+    text = text.replace(WAKE_WORD, "")
 
-    if any(x in text for x in ["i love you", "love you"]):
-        return "I appreciate that."
-
-    if "hello" in text:
-        return "Hello, I am online."
-
-    if "how are you" in text:
-        return "I am operating normally."
-
-    if "what can you do" in text:
-        return "I can tell time, date, jokes, and basic commands."
-
-    return "I didn't understand that clearly."
+    # cleanup leftover punctuation/spaces
+    return text.replace(",", "").replace(".", "").strip()
 
 
 def handle(text: str) -> str:
 
-    result = score_intent(text)
+    global active
+
+    if not text:
+        return ""
+
+    raw = text.lower().strip()
+    cleaned = _clean(raw)
 
     # -------------------------
-    # TIER 1: STRONG INTENT
+    # WAKE WORD GATE
     # -------------------------
-    if result.confidence >= 0.75:
+    if not active:
 
-        intent = result.intent
+        if WAKE_WORD in raw:
+            active = True
 
-        if intent == "time":
-            return f"The time is {datetime.now().strftime('%H:%M')}."
+            # if user ONLY said "jarvis", don't continue processing
+            if cleaned == "":
+                return "Yes?"
 
-        if intent == "date":
-            return f"Today is {datetime.now().strftime('%A %B %d')}."
+            # if wake word + command in same sentence
+            return _process(cleaned)
 
-        if intent == "joke":
-            return "Why did the AI cross the road? To optimize the reward function."
-
-        if intent == "weather":
-            return "Weather module not connected yet."
+        return ""   # ignore everything else
 
     # -------------------------
-    # TIER 2: WEAK INTENT (RECOVERY)
+    # EXIT CONDITIONS
     # -------------------------
-    if 0.45 <= result.confidence < 0.75:
-
-        if result.intent == "time":
-            return f"The time is {datetime.now().strftime('%H:%M')}."
-
-        if result.intent == "date":
-            return f"Today is {datetime.now().strftime('%A %B %d')}."
-
-        if result.intent == "joke":
-            return "Why did the AI cross the road? To optimize the reward function."
+    if any(x in cleaned for x in ["sleep", "stop listening", "goodbye"]):
+        active = False
+        return "Going idle."
 
     # -------------------------
-    # TIER 3: FALLBACK CHAT
+    # EMPTY SAFETY
     # -------------------------
-    return fallback_response(result.cleaned)
+    if cleaned == "":
+        return ""
+
+    # -------------------------
+    # NORMAL COMMAND FLOW
+    # -------------------------
+    return _process(cleaned)
+
+
+def _process(text: str) -> str:
+
+    text = text.strip()
+
+    if "time" in text:
+        return f"The time is {datetime.now().strftime('%H:%M')}."
+
+    if "date" in text:
+        return f"Today is {datetime.now().strftime('%A %B %d')}."
+
+    if "joke" in text:
+        return "Why did the AI cross the road? To optimize the reward function."
+
+    if "weather" in text:
+        return "Weather module not connected yet."
+    
+    if "goodbye" in text:
+        return "Goodbye! Have a great day!"
+    
+
+    return "I didn't understand that clearly."
