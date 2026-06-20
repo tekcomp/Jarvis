@@ -1,23 +1,55 @@
 from datetime import datetime
+import re
 
 WAKE_WORD = "jarvis"
-
 active = False
 
 
+# -------------------------
+# CLEAN INPUT
+# -------------------------
 def _clean(text: str) -> str:
     """
-    Removes wake word + cleans punctuation noise
+    Removes wake word + noise + punctuation safely
     """
     text = text.lower().strip()
 
-    # remove wake word cleanly (not just detect it)
+    # remove wake word
     text = text.replace(WAKE_WORD, "")
 
-    # cleanup leftover punctuation/spaces
-    return text.replace(",", "").replace(".", "").strip()
+    # remove punctuation (more robust than before)
+    text = re.sub(r"[^\w\s]", "", text)
+
+    return text.strip()
 
 
+# -------------------------
+# SIMPLE CONFIDENCE SCORER
+# -------------------------
+def _confidence(text: str, keywords: list) -> float:
+    """
+    Lightweight scoring to prevent garbage triggers
+    """
+    score = 0.0
+
+    for kw in keywords:
+        if kw in text:
+            score += 0.6
+
+        # exact match bonus
+        if text == kw:
+            score += 0.3
+
+        # word-level match bonus
+        if kw in text.split():
+            score += 0.1
+
+    return min(score, 1.0)
+
+
+# -------------------------
+# MAIN ENTRY
+# -------------------------
 def handle(text: str) -> str:
 
     global active
@@ -36,14 +68,13 @@ def handle(text: str) -> str:
         if WAKE_WORD in raw:
             active = True
 
-            # if user ONLY said "jarvis", don't continue processing
+            # only wake word
             if cleaned == "":
                 return "Yes?"
 
-            # if wake word + command in same sentence
             return _process(cleaned)
 
-        return ""   # ignore everything else
+        return ""  # ignore everything else
 
     # -------------------------
     # EXIT CONDITIONS
@@ -59,29 +90,44 @@ def handle(text: str) -> str:
         return ""
 
     # -------------------------
-    # NORMAL COMMAND FLOW
+    # NOISE FILTER (IMPORTANT FIX)
+    # -------------------------
+    NOISE_BLOCK = ["darkness", "to this date", "the color is blue"]
+
+    if any(x in cleaned for x in NOISE_BLOCK):
+        return "I didn't understand that clearly."
+
+    # -------------------------
+    # NORMAL FLOW
     # -------------------------
     return _process(cleaned)
 
 
+# -------------------------
+# EXECUTION ENGINE
+# -------------------------
 def _process(text: str) -> str:
 
     text = text.strip()
 
-    if "time" in text:
+    # TIME
+    if _confidence(text, ["time", "clock", "what time"]) > 0.5:
         return f"The time is {datetime.now().strftime('%H:%M')}."
 
-    if "date" in text:
+    # DATE
+    if _confidence(text, ["date", "today", "what day"]) > 0.5:
         return f"Today is {datetime.now().strftime('%A %B %d')}."
 
-    if "joke" in text:
+    # JOKE
+    if _confidence(text, ["joke", "funny", "laugh"]) > 0.5:
         return "Why did the AI cross the road? To optimize the reward function."
 
-    if "weather" in text:
+    # WEATHER
+    if _confidence(text, ["weather", "temperature", "forecast"]) > 0.5:
         return "Weather module not connected yet."
-    
+
+    # GOODBYE
     if "goodbye" in text:
         return "Goodbye! Have a great day!"
-    
 
     return "I didn't understand that clearly."
