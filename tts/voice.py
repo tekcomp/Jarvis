@@ -2,46 +2,30 @@ import sounddevice as sd
 from kokoro import KPipeline
 import threading
 import state
+import time
 
 pipeline = KPipeline(lang_code="a", device="cpu")
-
 VOICE = "af_heart"
 
-def _play(text):
+def _play(text: str):
     try:
-        gen = pipeline(
-            text=text,
-            voice=VOICE
-        )
+        state.state.ignore_audio = True   # 🔥 BLOCK MIC DURING SPEAKING
+
+        gen = pipeline(text=text, voice=VOICE)
 
         for _, _, audio in gen:
-            if state.state.stop_speaking:
-                sd.stop()
-                break
-
             sd.play(audio, 24000)
             sd.wait()
 
-    except Exception as e:
-        print("[TTS ERROR]", e)
-
     finally:
+        time.sleep(0.5)
+        state.state.ignore_audio = False
         state.state.speaking = False
-        state.state.stop_speaking = False
 
 
-def speak(text):
+def speak(text: str):
     if not text:
         return
 
-    if state.state.speaking:
-        return
-
     state.state.speaking = True
-
-    threading.Thread(
-        target=_play,
-        args=(text,),
-        daemon=True
-    ).start()
-
+    threading.Thread(target=_play, args=(text,), daemon=True).start()

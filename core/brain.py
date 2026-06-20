@@ -1,41 +1,50 @@
-from llm.ollama import ask_ai
-from tts.voice import speak
+import re
+from datetime import datetime
 
-WAKE_WORD = "jarvis"
+def clean(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"[^\w\s]", "", text)
+    return text.strip()
 
-def handle(text: str):
-    if not text:
-        return ""
+def handle(text: str) -> str:
+    text = clean(text)
 
-    text = text.strip().lower()
+    # remove wake words
+    text = text.replace("hey jarvis", "")
+    text = text.replace("jarvis", "")
+    text = text.strip()
 
-    print("Heard:", text)
+    # wake word only
+    if text == "":
+        return "Yes sir."
 
-    # -------------------------
-    # CASE 1: WAKE WORD PRESENT
-    # -------------------------
-    if WAKE_WORD in text:
-        prompt = text.replace(WAKE_WORD, "").strip()
+    # greetings
+    if "hello" in text:
+        return "Hello sir."
 
-        if not prompt:
-            prompt = "Yes?"
+    if "good morning" in text:
+        return "Good morning sir."
 
-        response = ask_ai(
-            "You are Jarvis. Be helpful, concise.\n\nUser: " + prompt
-        )
+    if "good afternoon" in text:
+        return "Good afternoon sir."
 
-        print("Jarvis:", response)
-        speak(response)
-        return response
+    if "good evening" in text:
+        return "Good evening sir."
 
-    # -------------------------
-    # CASE 2: DIRECT QUESTION MODE (NO WAKE WORD)
-    # -------------------------
-    # THIS FIXES YOUR PROBLEM
-    response = ask_ai(
-        "You are Jarvis. Answer concisely.\n\nUser: " + text
-    )
+    # identity
+    if "your name" in text:
+        return "I am Jarvis."
 
-    print("Jarvis:", response)
-    speak(response)
-    return response
+    # time
+    if "time" in text:
+        return f"The time is {datetime.now().strftime('%I:%M %p')}."
+
+    # joke
+    if "joke" in text:
+        return "Why did the AI go to school? To improve its neural network."
+
+    # math test
+    if "2 plus 2" in text:
+        return "2 plus 2 equals 4."
+
+    return "I did not understand that command."
