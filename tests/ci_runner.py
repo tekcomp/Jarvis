@@ -12,7 +12,7 @@ from tests.ci_dashboard import CIDashboard
 
 
 # =========================================================
-# WEIGHTS (IMPORTANT FOR REAL SCORING)
+# WEIGHTS (CI CONTRACT)
 # =========================================================
 WEIGHTS = {
     "brain": 40,
@@ -22,16 +22,35 @@ WEIGHTS = {
 }
 
 
+# =========================================================
+# SAFE RUN (STRICT CONTRACT NORMALIZER)
+# =========================================================
 def safe_run(fn, name):
     try:
-        return fn()
+        result = fn()
+
+        # -----------------------------
+        # HARD NORMALIZATION (FIXES YOUR CRASH)
+        # -----------------------------
+        if isinstance(result, dict):
+            passed = result.get("passed", 0)
+            failed = result.get("failed", 0)
+            return {"passed": passed, "failed": failed}
+
+        # legacy tuple support (JUST IN CASE)
+        if isinstance(result, tuple) and len(result) == 2:
+            return {"passed": result[0], "failed": result[1]}
+
+        print(f"[CI WARNING] {name} returned invalid format: {type(result)}")
+        return {"passed": 0, "failed": 1}
+
     except Exception as e:
         print(f"[CI ERROR] {name} crashed: {e}")
         return {"passed": 0, "failed": 1}
 
 
 # =========================================================
-# LIVE CI RUNNER
+# MAIN CI PIPELINE
 # =========================================================
 def main():
 
@@ -42,7 +61,7 @@ def main():
     dash = CIDashboard()
 
     # -------------------------
-    # CORE TESTS (SAFE EXECUTION)
+    # CORE TESTS
     # -------------------------
     b = safe_run(run_brain_tests, "brain")
     dash.add("brain", b["passed"], b["failed"], weight=WEIGHTS["brain"])
@@ -57,7 +76,7 @@ def main():
     dash.add("interrupt", i["passed"], i["failed"], weight=WEIGHTS["interrupt"])
 
     # -------------------------
-    # REAL SYSTEM METRICS (NOT FAKE)
+    # SYSTEM METRICS (PLACEHOLDERS FOR NOW)
     # -------------------------
     dash.add("latency", 0, 0, weight=5)
     dash.add("memory", 0, 0, weight=5)

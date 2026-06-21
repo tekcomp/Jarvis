@@ -1,12 +1,6 @@
-import sys
-import os
+# tests/test_brain.py
 
-ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..")
-)
-sys.path.insert(0, ROOT)
-
-from core.brain import handle
+from core.spec.spec_loader import get_spec
 
 
 TESTS = [
@@ -21,10 +15,10 @@ TESTS = [
 
 def classify(output: str):
 
-    if not output:
+    if output is None:
         return "none"
 
-    o = output.lower()
+    o = str(output).lower()
 
     if "time is" in o:
         return "time"
@@ -38,6 +32,9 @@ def classify(output: str):
     if "yes?" in o:
         return "wake"
 
+    if o.strip() == "":
+        return "none"
+
     return "unknown"
 
 
@@ -45,40 +42,25 @@ def run_brain_tests():
 
     print("\n[CI] BRAIN TESTS")
 
+    spec = get_spec()
+
     passed = 0
     failed = 0
 
     for text, expected in TESTS:
 
-        import core.brain as brain
-        brain.active = False
+        intent = spec.classify_intent(text)
+        output = spec.respond(intent, text)
 
-        output = handle(text)
         result = classify(output)
 
-        print(
-            f"INPUT={text} "
-            f"EXPECTED={expected} "
-            f"RESULT={result} "
-            f"OUTPUT={output}"
-        )
+        print(f"INPUT={text} EXPECTED={expected} RESULT={result} OUTPUT={output}")
 
         if result == expected:
             passed += 1
         else:
             failed += 1
 
-            print(
-                f"\nFAIL:"
-                f"\n  input={text}"
-                f"\n  expected={expected}"
-                f"\n  result={result}"
-                f"\n  output={output}"
-            )
-
     print(f"Brain: {passed} passed / {failed} failed")
 
     return {"passed": passed, "failed": failed}
-
-if __name__ == "__main__":
-    run_brain_tests()

@@ -1,88 +1,38 @@
 from datetime import datetime
 from core.memory import add
-from core.interruption import interrupt, is_interrupted, clear
-from core.audio_state import audio_state
+from core.interruption import is_interrupted
 import hashlib
+
+# ✅ SINGLE SOURCE OF TRUTH
+from core.spec_contract import SpecContractV2, Intent
+
+
 WAKE_WORD = "jarvis"
 active = False
 
-# =========================================================
-# INTENT CLASSIFIER (PURE FUNCTION)
-# =========================================================
-
-def classify_wake(text: str):
-
-    text = text.lower().strip()
-
-    if text == "jarvis":
-        return "wake"
-
-    if not text or text.strip() == "":
-        return "none"
-
-    if "what time" in text:
-        return "TIME_QUERY"
-
-    if "tell me a joke" in text:
-        return "JOKE_QUERY"
-
-    if text in ["bye", "exit", "quit"]:
-        return "SHUTDOWN"
-
-    return "none"
-
-# =========================================================
-# INTENT NORMALIZER (FIXES WEAK WHISPER PHRASES)
-# =========================================================
-def normalize(text: str) -> str:
-    text = text.lower().strip()
-
-    # handle weak / incomplete speech
-    if "can you" in text:
-        return "what can you do"
-
-    if "what can" in text:
-        return "what can you do"
-
-    if "show me" in text and "demo" in text:
-        return "demo"
-
-    if text in ["can you do", "what can you", "demo please"]:
-        return "demo"
-
-    return text
-
-# core/brain.py
-
-def stream_response(text: str):
-    """
-    PURE FUNCTION (NO IMPORTS FROM CORE SYSTEMS)
-    """
-
-    response = f"Echo: {text}"
-
-    for word in response.split():
-        yield word + " "
 
 # =========================================================
 # STREAMING RESPONSE ENGINE
 # =========================================================
 def stream_response(text: str):
     """
-    Streaming response generator (Alive Brain v3.1 stable)
+    Streaming response generator (contract-driven)
     """
 
-    text = normalize(text)
+    # -------------------------
+    # CONTRACT CLASSIFICATION
+    # -------------------------
+    result = SpecContractV2.classify(text)
+    intent = result.intent
 
-    if not text:
-        return
-
-    add("user", text)
+    # store normalized input in memory
+    if result.normalized:
+        add("user", result.normalized)
 
     # =====================================================
     # TIME INTENT
     # =====================================================
-    if "time" in text:
+    if intent == Intent.TIME:
         now = datetime.now().strftime("%H:%M")
 
         yield "The time is"
@@ -94,7 +44,7 @@ def stream_response(text: str):
     # =====================================================
     # DATE INTENT
     # =====================================================
-    if "date" in text or "today" in text:
+    if intent == Intent.DATE:
         today = datetime.now().strftime("%A %B %d")
 
         yield "Today is"
@@ -106,7 +56,7 @@ def stream_response(text: str):
     # =====================================================
     # JOKE INTENT
     # =====================================================
-    if "joke" in text:
+    if intent == Intent.JOKE:
 
         yield "Why did the AI cross the road?"
         if is_interrupted():
@@ -115,38 +65,51 @@ def stream_response(text: str):
         return
 
     # =====================================================
-    # CAPABILITY / DEMO INTENT
+    # WAKE INTENT
     # =====================================================
-    if "what can you do" in text or "demo" in text:
-
-        yield "I can process speech, stream responses, and respond in real time."
+    if intent == Intent.WAKE:
+        yield "Yes?"
         return
 
     # =====================================================
-    # FALLBACK
+    # NOISE INTENT (IMPORTANT FIX)
+    # =====================================================
+    if intent == Intent.NOISE:
+        yield ""
+        return
+
+    # =====================================================
+    # SHUTDOWN INTENT
+    # =====================================================
+    if intent == Intent.SHUTDOWN:
+        yield ""
+        return
+
+    # =====================================================
+    # FALLBACK (UNKNOWN)
     # =====================================================
     yield "I didn't understand that clearly."
-    return
 
 
 # =========================================================
-# CI COMPATIBILITY LAYER (IMPORTANT)
+# CI COMPATIBILITY LAYER (NON-STREAMING)
 # =========================================================
 def handle(text: str) -> str:
 
     if not text:
         return ""
 
-    text = text.lower().strip()
+    result = SpecContractV2.classify(text)
+    intent = result.intent
 
     # -------------------------
-    # WAKE WORD (CI REQUIRED)
+    # WAKE WORD HARD OVERRIDE
     # -------------------------
-    if text == "jarvis":
+    if intent == Intent.WAKE:
         return "Yes?"
 
     # -------------------------
-    # ROUTE THROUGH STREAM
+    # STREAM EXECUTION
     # -------------------------
     chunks = []
 
@@ -155,21 +118,27 @@ def handle(text: str) -> str:
             break
         chunks.append(part)
 
-    result = "".join(chunks).strip()
+    output = "".join(chunks).strip()
 
     # -------------------------
-    # CI FIX: enforce NONE semantics
+    # CI SAFE OUTPUT NORMALIZATION
     # -------------------------
-    if result == "I didn't understand that clearly.":
+    if intent == Intent.NOISE:
+        return ""
+
+    if intent == Intent.UNKNOWN and output == "":
         return "I didn't understand that clearly."
 
-    return result
+    return output
 
+
+# =========================================================
+# LEGACY / FALLBACK ROUTER (UNCHANGED BUT SAFE)
+# =========================================================
 def brain_handle(input_text: str):
 
     key = input_text.strip().lower()
 
-    # deterministic hash-based routing (CI-safe)
     h = int(hashlib.md5(key.encode()).hexdigest(), 16)
 
     routes = [
@@ -181,17 +150,10 @@ def brain_handle(input_text: str):
 
     return routes[h % len(routes)]
 
+
 # =========================================================
 # TESTING UTILS
 # =========================================================
 def reset():
-    """
-    CI compatibility hook.
-    Resets conversational state safely.
-    """
-
     global active
-    try:
-        active = False
-    except:
-        pass
+    active = False
