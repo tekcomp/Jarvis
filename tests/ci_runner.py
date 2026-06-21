@@ -4,65 +4,72 @@ import os
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
+from core.brain import handle, reset
 from tests.test_brain import run_brain_tests
 from tests.test_pipeline_mock import run_pipeline_tests
 from tests.test_wake_stream import run_wake_tests
 
-# -------------------------------------------------
-# CRITICAL: IMPORT BRAIN RESET HOOK
-# -------------------------------------------------
-from core.brain import reset
+
+# =========================================================
+# SAFE WRAPPER FOR STATEFUL SYSTEMS
+# =========================================================
+def run_brain_tests_isolated():
+    print("\n[CI] BRAIN TESTS\n")
+
+    reset()  # IMPORTANT: isolate state
+
+    result = run_brain_tests()
+
+    reset()  # cleanup after test
+
+    print(f"Brain: {result['passed']} passed / {result['failed']} failed")
+    return result
 
 
-# =================================================
-# CI SAFE WRAPPER
-# ensures no state leaks between test suites
-# =================================================
-def run_with_reset(test_fn, name: str):
-    print(f"\n[CI] {name}")
+def run_pipeline_tests_isolated():
+    print("\n[CI] PIPELINE MOCK TESTS\n")
 
-    try:
-        reset()  # HARD RESET before suite
-        result = test_fn()
-        reset()  # HARD RESET after suite
+    reset()
 
-        return result
+    result = run_pipeline_tests()
 
-    except Exception as e:
-        print(f"[CI ERROR] {name}: {e}")
+    reset()
 
-        return {
-            "passed": 0,
-            "failed": 999
-        }
+    print(f"Pipeline: {result['passed']} passed / {result['failed']} failed")
+    return result
 
 
+def run_wake_tests_isolated():
+    print("\n[CI] WAKE STREAM TESTS\n")
+
+    reset()
+
+    result = run_wake_tests()
+
+    reset()
+
+    print(f"Wake Stream: {result['passed']} passed / {result['failed']} failed")
+    return result
+
+
+# =========================================================
+# MAIN CI RUNNER
+# =========================================================
 def main():
 
     print("\n===================================")
-    print(" JARVIS CI PIPELINE v1 (HARDENED)")
+    print(" JARVIS CI PIPELINE v1 (ISOLATED STATE FIX)")
     print("===================================\n")
 
     results = []
 
-    # -------------------------------------------------
-    # BRAIN TESTS
-    # -------------------------------------------------
-    results.append(run_with_reset(run_brain_tests, "BRAIN TESTS"))
+    # -------------------------
+    # ISOLATED EXECUTION LAYERS
+    # -------------------------
+    results.append(run_brain_tests_isolated())
+    results.append(run_pipeline_tests_isolated())
+    results.append(run_wake_tests_isolated())
 
-    # -------------------------------------------------
-    # PIPELINE MOCK TESTS
-    # -------------------------------------------------
-    results.append(run_with_reset(run_pipeline_tests, "PIPELINE MOCK TESTS"))
-
-    # -------------------------------------------------
-    # WAKE STREAM TESTS (MOST STATE-SENSITIVE)
-    # -------------------------------------------------
-    results.append(run_with_reset(run_wake_tests, "WAKE STREAM TESTS"))
-
-    # -------------------------------------------------
-    # FINAL SUMMARY
-    # -------------------------------------------------
     total_failures = sum(r["failed"] for r in results)
 
     print("\n===================================")

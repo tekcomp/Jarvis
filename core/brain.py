@@ -1,102 +1,107 @@
 from datetime import datetime
-from core.memory import add
 
 WAKE_WORD = "jarvis"
 
-active = False
+_state = {
+    "active": False
+}
 
 
-# =========================================================
-# RESET (USED BY CI ONLY)
-# =========================================================
 def reset():
-    global active
-    active = False
+    _state["active"] = False
 
 
 # =========================================================
-# CORE PROCESSOR
+# CANONICAL NORMALIZER (ONLY SOURCE OF TRUTH)
+# =========================================================
+def _normalize(text: str) -> str:
+    return (
+        text.lower()
+        .replace(WAKE_WORD, "")
+        .replace("?", "")
+        .replace(".", "")
+        .replace("!", "")
+        .strip()
+    )
+
+
+def _is_wake(text: str) -> bool:
+    return WAKE_WORD in text.lower()
+
+
+def _is_wake_only(text: str) -> bool:
+    return _normalize(text) == ""
+
+
+# =========================================================
+# PROCESSOR
 # =========================================================
 def _process(text: str) -> str:
 
     text = text.strip()
 
-    add("user", text)
-
     if "time" in text:
-        response = f"The time is {datetime.now().strftime('%H:%M')}."
+        return f"The time is {datetime.now().strftime('%H:%M')}."
 
-    elif "date" in text:
-        response = f"Today is {datetime.now().strftime('%A %B %d')}."
+    if "date" in text:
+        return f"Today is {datetime.now().strftime('%A %B %d')}."
 
-    elif "joke" in text:
-        response = "Why did the AI cross the road? To optimize the reward function."
+    if "joke" in text:
+        return "Why did the AI cross the road? To optimize the reward function."
 
-    elif "weather" in text:
-        response = "Weather module not connected yet."
+    if "weather" in text:
+        return "Weather module not connected yet."
 
-    elif any(x in text for x in ["bye", "goodbye", "stop listening"]):
-        response = "Going idle."
+    if any(x in text for x in ["bye", "goodbye", "stop"]):
+        _state["active"] = False
+        return "Going idle."
 
-    else:
-        response = "I didn't understand that clearly."
-
-    add("assistant", response)
-    return response
+    return "I didn't understand that clearly."
 
 
 # =========================================================
 # ENTRY POINT
 # =========================================================
-def handle(text: str, reset_mode: bool = False) -> str:
-    global active
-
-    if reset_mode:
-        active = False
+def handle(text: str) -> str:
 
     if not text:
         return ""
 
     raw = text.lower().strip()
 
-    # -------------------------
-    # WAKE WORD
-    # -------------------------
-    if WAKE_WORD in raw:
-        active = True
+    wake_detected = _is_wake(raw)
 
-        cleaned = raw.replace(WAKE_WORD, "").strip(",. ")
+    # =====================================================
+    # IDLE MODE
+    # =====================================================
+    if not _state["active"]:
 
-        if not cleaned:
+        if wake_detected:
+
+            _state["active"] = True
+
+            # STRICT CASE: wake-only
+            if _is_wake_only(raw):
+                return "Yes?"
+
+            cleaned = _normalize(raw)
+            return _process(cleaned)
+
+        # passive mode
+        if any(x in raw for x in ["time", "date", "joke", "weather"]):
+            return _process(raw)
+
+        return ""
+
+    # =====================================================
+    # ACTIVE MODE
+    # =====================================================
+    if _state["active"]:
+
+        if wake_detected and _is_wake_only(raw):
             return "Yes?"
 
-        return _process(cleaned)
+        if wake_detected:
+            raw = _normalize(raw)
 
-    # -------------------------
-    # ACTIVE MODE
-    # -------------------------
-    if active:
-        response = _process(raw)
-
-        # CRITICAL FIX:
-        # auto-exit on goodbye
-        if "going idle" in response.lower():
-            active = False
-
-        return response
-
-    # -------------------------
-    # PASSIVE MODE
-    # -------------------------
-    if any(x in raw for x in ["time", "date", "joke", "weather"]):
         return _process(raw)
-
-    return ""
-
-def reset():
-    """
-    CI / test isolation hook
-    Resets conversational state
-    """
-    global active
-    active = False
