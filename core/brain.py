@@ -29,7 +29,7 @@ def classify_wake(text: str):
     if text in ["bye", "exit", "quit"]:
         return "SHUTDOWN"
 
-    return "UNKNOWN"
+    return "none"
 
 # =========================================================
 # INTENT NORMALIZER (FIXES WEAK WHISPER PHRASES)
@@ -125,7 +125,7 @@ def stream_response(text: str):
     # =====================================================
     # FALLBACK
     # =====================================================
-    yield ""
+    yield "I didn't understand that clearly."
     return
 
 
@@ -161,7 +161,7 @@ def handle(text: str) -> str:
     # CI FIX: enforce NONE semantics
     # -------------------------
     if result == "I didn't understand that clearly.":
-        return None
+        return "I didn't understand that clearly."
 
     return result
 
