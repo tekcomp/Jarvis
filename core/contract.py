@@ -29,8 +29,6 @@ def reset():
     Safe no-op for now, extensible later.
     """
 
-    from core.brain import reset as brain_reset
-
     try:
         brain_reset()
     except Exception:
@@ -45,7 +43,5 @@ def stream(text: str):
     Runtime streaming interface.
     CI tests SHOULD NOT use this directly.
     """
-
-    from core.brain import stream_response
 
     return stream_response(text)
