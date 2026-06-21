@@ -1,71 +1,67 @@
 # ==============================
-# core/alive_kernel.py (CI FIXED v8 - NUMPY SAFE + STABLE PIPELINE)
+# core/alive_kernel.py (AGENT v3 STABLE AUDIO GATED FIXED)
 # ==============================
 
 import asyncio
-from pydoc import text
 import queue
 import threading
-import numpy as np
+import time
 
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
-from core.contract import handle, stream
+from core.brain import stream_response
 from tts.voice import speak
 
 from core.runtime_state import system_busy
 from core.shutdown import is_shutdown, trigger_shutdown
 from core.interruption import is_interrupted
 from core.interrupt_fsm import InterruptFSM
-from core.audio_frontend import process_audio_stream
-from core.audio_frontend import feed_tts_audio, mark_tts
+from core.audio_state import audio_state
+
 
 # =========================================================
-# GLOBAL STATE
+# GLOBAL FSM
 # =========================================================
 fsm = InterruptFSM()
 
+# =========================================================
+# EVENT BUS
+# =========================================================
 audio_queue = queue.Queue()
 tts_queue = queue.Queue()
 
-TTS_ACTIVE = False
-
 
 # =========================================================
-# AUDIO SAFETY CORE (FIXED NUMPY ISSUE)
+# SAFE AUDIO CHECK
 # =========================================================
 def has_audio(audio):
-
     if audio is None:
         return False
-
-    # numpy array safe check
-    if isinstance(audio, np.ndarray):
-        return audio.size > 0
-
-    # list / tuple safe check
-    if isinstance(audio, (list, tuple)):
-        return len(audio) > 0
-
-    # bytes safe check
-    if isinstance(audio, (bytes, bytearray)):
-        return len(audio) > 0
-
-    # fallback safe check
     try:
         return len(audio) > 0
     except Exception:
         return False
 
 
-def is_self_audio_blocked():
-    return system_busy.is_set()
+# =========================================================
+# TTS STATE CONTROL (SINGLE SOURCE OF TRUTH)
+# =========================================================
+def enter_tts():
+    system_busy.set()
+    audio_state.tts_started()
+
+
+def exit_tts():
+    system_busy.clear()
+    audio_state.tts_finished()
 
 
 # =========================================================
-# TTS ENGINE
+# TTS WORKER (NO DUPLICATES / NO RECURSION)
 # =========================================================
 def tts_worker():
+
+    fsm.start_tts()
 
     try:
         while not is_shutdown():
@@ -78,26 +74,26 @@ def tts_worker():
             if text is None:
                 break
 
-            system_busy.set()
+            enter_tts()
 
             try:
                 print(f"[JARVIS TTS] {text}")
-                
-                feed_tts_audio(text.encode() if isinstance(text, str) else text)
-                mark_tts(len(text) * 0.08)
+                print(f"[TTS TEST] speaking: {text}")
 
                 speak(text)
 
             finally:
-                system_busy.clear()
+                exit_tts()
                 tts_queue.task_done()
+                print("[TTS TEST] done")
 
     finally:
         print("[TTS] EXIT")
+        fsm.stop_tts()
 
 
 # =========================================================
-# COGNITIVE ENGINE (SAFE AUDIO HANDLING)
+# COGNITIVE LOOP
 # =========================================================
 async def cognitive_loop():
 
@@ -112,19 +108,21 @@ async def cognitive_loop():
         try:
             packet = audio_queue.get(timeout=0.5)
         except queue.Empty:
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.03)
             continue
 
         if packet is None:
             break
 
-        audio = packet.get("audio", None)
+        audio = packet.get("audio")
 
-        # FIXED SAFE GUARD
+        # FIX: numpy-safe audio check
         if not has_audio(audio):
             continue
 
-        if is_self_audio_blocked():
+        # CRITICAL FIX: ONLY USE audio_state GATE (NO custom echo system)
+        if not audio_state.mic_allowed():
+            print("[CI-ECHO] BLOCKED BY AUDIO STATE")
             continue
 
         frame_id += 1
@@ -133,38 +131,14 @@ async def cognitive_loop():
 
         text = transcribe(audio)
 
-        if not text:
+        if not text or len(text.strip()) < 2:
             continue
 
-        print(f"[CI-FSM] HEARD text={text}")
+        print(f"[CI-FSM] frame={frame_id} HEARD text={text}")
 
-        # =============================
-        # INTENT HANDLING (INLINE)
-        # =============================
-        t = text.lower()
-
-        if "time" in t:
-            from datetime import datetime
-            reply = f"The time is {datetime.now().strftime('%H:%M:%S')}."
-            tts_queue.put(reply)
-            continue
-
-        if "date" in t or "today" in t:
-            from datetime import datetime
-            reply = f"Today is {datetime.now().strftime('%A, %B %d, %Y')}."
-            tts_queue.put(reply)
-            continue
-
-        if "joke" in t:
-            tts_queue.put("Why did the AI cross the road? To optimize the reward function.")
-            continue
-
-        # =============================
-        # LLM STREAM FALLBACK
-        # =============================
         final_text = ""
 
-        for chunk in stream(text):
+        for chunk in stream_response(text):
 
             if is_interrupted():
                 final_text = ""
@@ -172,7 +146,8 @@ async def cognitive_loop():
 
             final_text += chunk
 
-        if final_text:
+        if final_text and not is_interrupted():
+            print(f"[CI-TTS] QUEUE_PUSH: {final_text}")
             tts_queue.put(final_text)
 
 
@@ -181,26 +156,43 @@ async def cognitive_loop():
 # =========================================================
 def vad_loop():
 
-    from stt.vad import get_speech_frames
+    frame_id = 0
 
-    def vad_fn(audio):
-        return len(audio) > 0  # replace with real VAD later
+    try:
+        for audio in get_speech_frames():
 
-    process_audio_stream(
-        raw_audio_iter=get_speech_frames(),
-        output_queue=audio_queue,
-        fsm=fsm,
-        system_busy=system_busy,
-        vad_fn=vad_fn
-    )
+            frame_id += 1
+
+            if is_shutdown():
+                break
+
+            if not has_audio(audio):
+                continue
+
+            # CRITICAL FIX: mic gating happens INSIDE VAD layer already
+            if not audio_state.mic_allowed():
+                continue
+
+            fsm.evaluate(frame_id, True)
+
+            audio_queue.put({
+                "frame_id": frame_id,
+                "audio": audio
+            })
+
+            print("[CI-VAD] AUDIO PUSHED")
+
+    finally:
+        print("[VAD] EXIT")
+
 
 # =========================================================
 # START KERNEL
 # =========================================================
 def start_kernel():
 
-    print("[SYSTEM] BOOTING JARVIS CORE v8 STABLE (NUMPY SAFE)")
-    print("[SYSTEM] AUDIO TYPE SAFETY ENABLED")
+    print("[SYSTEM] AGENT v3 BOOT")
+    print("[SYSTEM] AUDIO GATE ENABLED")
 
     threading.Thread(target=vad_loop, daemon=True).start()
     threading.Thread(target=tts_worker, daemon=True).start()
@@ -209,12 +201,15 @@ def start_kernel():
         asyncio.run(cognitive_loop())
 
     except KeyboardInterrupt:
-        trigger_shutdown("keyboard interrupt")
+        trigger_shutdown("keyboard")
 
     finally:
-        trigger_shutdown("kernel exit")
+        trigger_shutdown("exit")
 
         audio_queue.put(None)
         tts_queue.put(None)
+
+        fsm.stop_tts()
+        fsm.fired = False
 
         print("[SYSTEM] SHUTDOWN COMPLETE")

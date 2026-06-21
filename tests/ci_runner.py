@@ -9,7 +9,7 @@ from tests.test_pipeline_mock import run_pipeline_tests
 from tests.test_wake_stream import run_wake_tests
 from tests.test_interrupt import run_interrupt_test
 from tests.ci_dashboard import CIDashboard
-
+from core.contract import handle, reset
 
 # =========================================================
 # WEIGHTS (CI CONTRACT)

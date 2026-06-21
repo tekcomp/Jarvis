@@ -1,7 +1,7 @@
 import time
 from core.audio_state import audio_state
 from core.interruption import interrupt, is_interrupted, clear
-from core.alive_kernel import system_busy
+from core.runtime_state import system_busy
 
 
 class MockInterruptCounter:

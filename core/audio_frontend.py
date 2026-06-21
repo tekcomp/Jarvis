@@ -8,10 +8,16 @@ import threading
 import numpy as np
 
 # OPTIONAL (WebRTC AEC)
+import importlib
+webrtc = None
 try:
-    import webrtc_audio_processing as webrtc
-    AEC_AVAILABLE = True
+    if importlib.util.find_spec("webrtc_audio_processing") is not None:
+        webrtc = importlib.import_module("webrtc_audio_processing")
+        AEC_AVAILABLE = True
+    else:
+        AEC_AVAILABLE = False
 except Exception:
+    webrtc = None
     AEC_AVAILABLE = False
 
 
