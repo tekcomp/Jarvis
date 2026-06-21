@@ -8,19 +8,52 @@ from core.audio_state import audio_state
 
 import threading
 import time
-
+import re
 
 # =========================================================
-# SINGLE STATE CONTROL (ONLY TRUTH SOURCE)
+# SYSTEM LOCKS
 # =========================================================
+pipeline_lock = threading.Lock()
+tts_lock = threading.Lock()
 system_busy = threading.Event()
 
 
 # =========================================================
-# TTS EXECUTION (NO EXTRA LOCKS)
+# INPUT NORMALIZER (NEW CRITICAL LAYER)
+# =========================================================
+def normalize_text(text: str) -> str:
+    if not text:
+        return ""
+
+    text = text.lower().strip()
+
+    # remove repeated consecutive words (basic de-dupe)
+    words = text.split()
+    deduped = []
+    for w in words:
+        if not deduped or deduped[-1] != w:
+            deduped.append(w)
+    text = " ".join(deduped)
+
+    # remove non-ascii noise (foreign scripts, broken whisper fragments)
+    if re.search(r"[^\x00-\x7F]+", text):
+        return ""
+
+    # ignore very short garbage
+    if len(text.strip()) < 3:
+        return ""
+
+    return text
+
+
+# =========================================================
+# TTS WRAPPER
 # =========================================================
 def safe_speak(text: str):
     if not text:
+        return
+
+    if not tts_lock.acquire(blocking=False):
         return
 
     try:
@@ -30,7 +63,7 @@ def safe_speak(text: str):
 
         print(f"[JARVIS TTS] {text}")
 
-        speak(text)   # MUST handle blocking internally
+        speak(text)
 
     except Exception as e:
         print(f"[TTS ERROR] {e}")
@@ -38,33 +71,47 @@ def safe_speak(text: str):
     finally:
         try:
             audio_state.stop_speaking()
-        except:
+        except Exception:
             pass
 
-        time.sleep(0.1)
         system_busy.clear()
+
+        time.sleep(0.15)
+
+        tts_lock.release()
 
 
 # =========================================================
-# PIPELINE (NO LOCKS — DROP OLD AUDIO ONLY)
+# PIPELINE
 # =========================================================
 def safe_pipeline(audio):
 
-    # drop audio while speaking
     if system_busy.is_set():
+        return
+
+    if not pipeline_lock.acquire(blocking=False):
         return
 
     try:
         L3("AUDIO RECEIVED FROM VAD")
 
+        # -------------------------
+        # STT
+        # -------------------------
         text = transcribe(audio)
 
+        # NEW: CLEAN INPUT BEFORE BRAIN
+        text = normalize_text(text)
+
         if not text:
-            L3("WHISPER EMPTY")
+            L3("WHISPER EMPTY / NOISE FILTERED")
             return
 
         print(f"[HEARD] {text}")
 
+        # -------------------------
+        # BRAIN
+        # -------------------------
         response = handle(text)
 
         if not response:
@@ -72,10 +119,16 @@ def safe_pipeline(audio):
 
         print(f"[JARVIS] {response}")
 
+        # -------------------------
+        # TTS
+        # -------------------------
         safe_speak(response)
 
     except Exception as e:
         print(f"[PIPELINE ERROR] {e}")
+
+    finally:
+        pipeline_lock.release()
 
 
 # =========================================================
@@ -88,11 +141,6 @@ def main():
 
     try:
         for audio in get_speech_frames():
-
-            # drop VAD noise during speaking
-            if system_busy.is_set():
-                continue
-
             safe_pipeline(audio)
 
     except KeyboardInterrupt:
