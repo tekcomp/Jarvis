@@ -1,6 +1,5 @@
 import asyncio
 import threading
-import time
 import queue
 
 from stt.vad import get_speech_frames
@@ -10,10 +9,11 @@ from tts.voice import speak
 
 from core.logger import L3
 from core.audio_state import audio_state
+from core.shutdown import trigger_shutdown, is_shutdown
 
 
 # =========================================================
-# COGNITIVE QUEUES
+# QUEUES
 # =========================================================
 audio_queue = queue.Queue()
 tts_queue = queue.Queue()
@@ -22,11 +22,16 @@ system_busy = threading.Event()
 
 
 # =========================================================
-# ASYNC TTS WORKER (NON-BLOCKING SPEECH ENGINE)
+# TTS WORKER
 # =========================================================
 def tts_worker():
-    while True:
-        text = tts_queue.get()
+
+    while not is_shutdown():
+
+        try:
+            text = tts_queue.get(timeout=0.5)
+        except queue.Empty:
+            continue
 
         if text is None:
             break
@@ -40,25 +45,33 @@ def tts_worker():
 
             speak(text)
 
-        except Exception as e:
-            print(f"[TTS ERROR] {e}")
-
         finally:
-            audio_state.stop_speaking()
-            system_busy.clear()
-            time.sleep(0.1)
+            try:
+                audio_state.stop_speaking()
+            except Exception:
+                pass
 
-        tts_queue.task_done()
+            system_busy.clear()
+
+            try:
+                tts_queue.task_done()
+            except Exception:
+                pass
+
+    print("[TTS] EXIT")
 
 
 # =========================================================
-# STT + BRAIN PROCESSOR (ASYNC LOOP)
+# COGNITIVE LOOP
 # =========================================================
 async def cognitive_loop():
 
-    while True:
+    while not is_shutdown():
 
-        audio = await asyncio.to_thread(audio_queue.get)
+        try:
+            audio = await asyncio.to_thread(audio_queue.get, True, 0.5)
+        except queue.Empty:
+            continue
 
         if audio is None:
             break
@@ -66,7 +79,6 @@ async def cognitive_loop():
         try:
             L3("AUDIO RECEIVED")
 
-            # STT (offload thread)
             text = await asyncio.to_thread(transcribe, audio)
 
             if not text:
@@ -74,7 +86,6 @@ async def cognitive_loop():
 
             print(f"[HEARD] {text}")
 
-            # BRAIN
             response = handle(text)
 
             if response:
@@ -84,31 +95,61 @@ async def cognitive_loop():
         except Exception as e:
             print(f"[PIPELINE ERROR] {e}")
 
+    print("[COGNITIVE] EXIT")
+
 
 # =========================================================
-# VAD PRODUCER THREAD
+# VAD THREAD
 # =========================================================
 def vad_producer():
-    for audio in get_speech_frames():
-        audio_queue.put(audio)
+
+    try:
+        for audio in get_speech_frames():
+
+            if is_shutdown():
+                break
+
+            audio_queue.put(audio)
+
+    finally:
+        print("[VAD] EXIT")
 
 
 # =========================================================
-# MAIN ENTRY
+# MAIN
 # =========================================================
 def main():
 
     print("[SYSTEM] BOOTING JARVIS COGNITIVE LOOP v2")
     print("[SYSTEM] STREAMING MODE ACTIVE\n")
 
-    # start VAD thread
-    threading.Thread(target=vad_producer, daemon=True).start()
+    vad_thread = threading.Thread(target=vad_producer)
+    tts_thread = threading.Thread(target=tts_worker)
 
-    # start TTS worker
-    threading.Thread(target=tts_worker, daemon=True).start()
+    vad_thread.start()
+    tts_thread.start()
 
-    # start async cognitive loop
-    asyncio.run(cognitive_loop())
+    try:
+        asyncio.run(cognitive_loop())
+
+    except KeyboardInterrupt:
+        trigger_shutdown("keyboard interrupt")
+
+    except Exception as e:
+        trigger_shutdown(f"fatal error: {e}")
+
+    finally:
+
+        trigger_shutdown("main exit")
+
+        audio_queue.put(None)
+        tts_queue.put(None)
+
+        # HARD JOIN (NO SLEEP)
+        vad_thread.join(timeout=2)
+        tts_thread.join(timeout=2)
+
+        print("[SYSTEM] SHUTDOWN COMPLETE")
 
 
 if __name__ == "__main__":

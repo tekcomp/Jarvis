@@ -1,8 +1,9 @@
 import numpy as np
 import pyaudio
-import signal
+
 from core.logger import L3
 from core.audio_state import audio_state
+from core.shutdown import is_shutdown
 
 RATE = 16000
 FRAME_SIZE = 1024
@@ -13,18 +14,10 @@ MIN_SPEECH = 6
 
 MIN_AVG_ENERGY = 35
 
-running = True
 
-
-def _shutdown(sig, frame):
-    global running
-    print("\n[SYSTEM] SAFE SHUTDOWN TRIGGERED")
-    running = False
-
-
-signal.signal(signal.SIGINT, _shutdown)
-
-
+# =========================================================
+# SAFE RMS
+# =========================================================
 def safe_rms(audio):
 
     if audio is None or len(audio) == 0:
@@ -40,9 +33,9 @@ def safe_rms(audio):
     return float(np.sqrt(val))
 
 
-# -------------------------
+# =========================================================
 # AUDIO QUALITY FILTER
-# -------------------------
+# =========================================================
 def is_valid_audio(buffer):
 
     if len(buffer) < MIN_SPEECH:
@@ -64,9 +57,13 @@ def is_valid_audio(buffer):
     return True
 
 
+# =========================================================
+# MAIN VAD GENERATOR
+# =========================================================
 def get_speech_frames():
 
     pa = pyaudio.PyAudio()
+
     device_index = pa.get_default_input_device_info()["index"]
 
     stream = pa.open(
@@ -88,40 +85,60 @@ def get_speech_frames():
 
     try:
 
-        while running:
+        while not is_shutdown():
 
-            frame = stream.read(FRAME_SIZE, exception_on_overflow=False)
-            audio = np.frombuffer(frame, dtype=np.int16)
+            try:
 
-            # 🔥 SAFE ECHO SUPPRESSION (NO FRAME LOSS)
+                frame = stream.read(
+                    FRAME_SIZE,
+                    exception_on_overflow=False,
+                )
+
+            except Exception as e:
+
+                print(f"[VAD READ ERROR] {e}")
+                continue
+
+            audio = np.frombuffer(
+                frame,
+                dtype=np.int16,
+            )
+
+            # -------------------------------------------------
+            # ECHO SUPPRESSION
+            # -------------------------------------------------
             if not audio_state.mic_allowed():
-                # replace with silence instead of dropping
                 audio = np.zeros_like(audio)
 
             rms = safe_rms(audio)
+
             is_speech = rms > MIN_RMS
 
-            # --------------------
-            # SPEECH START
-            # --------------------
+            # -------------------------------------------------
+            # SPEECH
+            # -------------------------------------------------
             if is_speech:
 
                 buffer.append(audio)
+
                 speech += 1
                 silence = 0
 
                 if not triggered and speech >= MIN_SPEECH:
+
                     triggered = True
+
                     L3("SPEECH START")
 
-            # --------------------
-            # SILENCE HANDLING
-            # --------------------
+            # -------------------------------------------------
+            # SILENCE
+            # -------------------------------------------------
             else:
 
                 if triggered:
 
                     silence += 1
+
                     buffer.append(audio)
 
                     if silence >= MAX_SILENCE:
@@ -129,9 +146,16 @@ def get_speech_frames():
                         if is_valid_audio(buffer):
 
                             final_audio = np.concatenate(buffer)
-                            final_audio = np.nan_to_num(final_audio).astype(np.int16)
 
-                            L3(f"SPEECH END frames={len(buffer)}")
+                            final_audio = (
+                                np.nan_to_num(final_audio)
+                                .astype(np.int16)
+                            )
+
+                            L3(
+                                f"SPEECH END frames={len(buffer)}"
+                            )
+
                             print("[VAD] YIELD AUDIO")
 
                             yield final_audio
@@ -142,14 +166,25 @@ def get_speech_frames():
                         triggered = False
 
                 else:
+
                     buffer = []
                     speech = 0
 
     finally:
+
         try:
             stream.stop_stream()
-            stream.close()
-            pa.terminate()
-            print("[VAD] CLEAN EXIT COMPLETE")
         except:
             pass
+
+        try:
+            stream.close()
+        except:
+            pass
+
+        try:
+            pa.terminate()
+        except:
+            pass
+
+        print("[VAD] CLEAN EXIT COMPLETE")
