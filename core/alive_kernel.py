@@ -1,5 +1,5 @@
 # ==============================
-# core/alive_kernel.py (ANTI-ECHO LOOP FIX v6)
+# core/alive_kernel.py (JARVIS STABLE v7 - FINAL FIX)
 # ==============================
 
 import asyncio
@@ -17,10 +17,11 @@ from core.shutdown import is_shutdown, trigger_shutdown
 from core.interruption import is_interrupted
 
 from core.interrupt_fsm import InterruptFSM
+from core.spec_contract_v2 import SpecContractV2, Intent
 
 
 # =========================================================
-# GLOBAL FSM
+# FSM (SINGLE SOURCE OF TRUTH)
 # =========================================================
 fsm = InterruptFSM()
 
@@ -29,30 +30,18 @@ tts_queue = queue.Queue()
 
 
 # =========================================================
-# ANTI-ECHO SYSTEM (CRITICAL FIX)
+# ANTI-ECHO CONTROL
 # =========================================================
 TTS_ACTIVE = False
-interrupt_token = 1
-interrupt_locked = False
-
-# 🚨 NEW: echo suppression window
-IGNORE_AUDIO_UNTIL = 0
-
-
-def reset_interrupt_state():
-    global interrupt_token, interrupt_locked
-    interrupt_token = 1
-    interrupt_locked = False
+IGNORE_UNTIL = 0
 
 
 def enter_tts_state():
-    global TTS_ACTIVE, IGNORE_AUDIO_UNTIL
-
+    global TTS_ACTIVE, IGNORE_UNTIL
     TTS_ACTIVE = True
-    reset_interrupt_state()
 
-    # 🚨 CRITICAL FIX: ignore mic during TTS playback + buffer tail
-    IGNORE_AUDIO_UNTIL = time.time() + 1.2
+    # HARD AUDIO LOCK WINDOW
+    IGNORE_UNTIL = time.time() + 1.3
 
 
 def exit_tts_state():
@@ -60,28 +49,30 @@ def exit_tts_state():
     TTS_ACTIVE = False
 
 
-def should_ignore_audio():
-    return time.time() < IGNORE_AUDIO_UNTIL
+def is_echo_window():
+    return time.time() < IGNORE_UNTIL
 
 
-def try_interrupt():
-    global interrupt_token, interrupt_locked
+# =========================================================
+# INTENT ROUTER (CRITICAL FIX)
+# =========================================================
+def route_intent(text: str):
 
-    if not system_busy.is_set():
-        return
-    if not TTS_ACTIVE:
-        return
-    if interrupt_locked:
-        return
+    contract = SpecContractV2.classify(text)
 
-    interrupt_locked = True
-    interrupt_token = 0
+    if contract.intent == Intent.TIME:
+        import datetime
+        return f"The time is {datetime.datetime.now().strftime('%H:%M:%S')}."
 
-    try:
-        from core.audio_state import audio_state
-        audio_state.on_interrupt()
-    except Exception:
-        pass
+    if contract.intent == Intent.DATE:
+        import datetime
+        return f"Today is {datetime.datetime.now().strftime('%A, %B %d, %Y')}."
+
+    if contract.intent == Intent.JOKE:
+        return "Why did the AI cross the road? To optimize the reward function."
+
+    # fallback goes to brain
+    return None
 
 
 # =========================================================
@@ -94,7 +85,7 @@ def tts_worker():
     while not is_shutdown():
 
         try:
-            text = tts_queue.get(timeout=0.5)
+            text = tts_queue.get(timeout=0.3)
         except queue.Empty:
             continue
 
@@ -127,8 +118,6 @@ async def cognitive_loop():
 
     while not is_shutdown():
 
-        print("[CI-DEBUG] waiting for audio...")
-
         try:
             packet = audio_queue.get(timeout=0.5)
         except queue.Empty:
@@ -138,32 +127,37 @@ async def cognitive_loop():
         if packet is None:
             break
 
-        audio = packet.get("audio")
-
-        if audio is None:
+        if is_echo_window():
+            print("[CI-ECHO] IGNORED AUDIO WINDOW")
             continue
 
-        # 🚨 CRITICAL FIX: ignore self-echo / TTS leakage
-        if should_ignore_audio():
-            print("[CI-ECHO] IGNORED AUDIO (TTS WINDOW)")
+        audio = packet.get("audio")
+
+        if not audio:
             continue
 
         frame_id += 1
-
-        print(f"[CI-AUDIO] RECEIVED frame={packet.get('frame_id')}")
 
         text = transcribe(audio)
 
         if not text:
             continue
 
-        # 🚨 SECOND FILTER: ignore echo phrases that match last output
-        if TTS_ACTIVE:
-            print("[CI-ECHO] BLOCKED POSSIBLE SELF AUDIO")
+        print(f"[CI-FSM] HEARD: {text}")
+
+        # =====================================================
+        # INTENT FIRST (CRITICAL FIX)
+        # =====================================================
+        direct = route_intent(text)
+
+        if direct:
+            print(f"[CI-ROUTER] DIRECT RESPONSE: {direct}")
+            tts_queue.put(direct)
             continue
 
-        print(f"[CI-FSM] frame={frame_id} HEARD text={text}")
-
+        # =====================================================
+        # FALLBACK TO STREAM ENGINE
+        # =====================================================
         final_text = ""
 
         for chunk in stream_response(text):
@@ -180,7 +174,7 @@ async def cognitive_loop():
 
 
 # =========================================================
-# VAD LOOP
+# VAD LOOP (FIXED STABILITY)
 # =========================================================
 def vad_loop():
 
@@ -191,24 +185,30 @@ def vad_loop():
 
             frame_id += 1
 
-            # 🚨 CRITICAL FIX: suppress VAD during TTS echo window
-            if should_ignore_audio():
+            if is_echo_window():
                 continue
 
             if audio is None:
                 continue
 
-            user_speaking = len(audio) > 0
+            # SAFE DETECTION
+            try:
+                speaking = len(audio) > 0
+            except Exception:
+                speaking = False
 
-            fsm.evaluate(frame_id, user_speaking)
+            fsm.evaluate(frame_id, speaking)
 
-            if user_speaking:
+            if speaking:
                 audio_queue.put({
                     "frame_id": frame_id,
                     "audio": audio
                 })
 
                 print("[CI-VAD] AUDIO PUSHED")
+
+            if is_shutdown():
+                break
 
     finally:
         print("[VAD] EXIT")
