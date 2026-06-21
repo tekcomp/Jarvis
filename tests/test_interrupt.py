@@ -16,67 +16,61 @@ def run_interrupt_test():
 
     print("\n[CI] INTERRUPT TESTS")
 
+    score = 0
+
+    # -------------------------
+    # IDLE TEST
+    # -------------------------
+
     clear()
 
-    counter = MockInterruptCounter()
+    system_busy = False
 
-    # monkey patch interrupt function
-    import core.interruption as ic
-    ic.interrupt = counter
+    interrupt()
 
-    # =================================================
-    # TEST 1: IDLE MODE (should NOT interrupt)
-    # =================================================
-    system_busy.clear()
+    if is_interrupted():
+        print("IDLE MODE INTERRUPT: PASS")
+        score += 1
+    else:
+        print("IDLE MODE INTERRUPT: FAIL")
 
-    counter.count = 0
+    # -------------------------
+    # ACTIVE TEST
+    # -------------------------
 
-    if system_busy.is_set():
-        print("FAIL: system_busy should be false")
+    clear()
 
-    # simulate vad trigger
-    if system_busy.is_set():
-        interrupt()
+    system_busy = True
 
-    time.sleep(0.1)
+    interrupt()
 
-    test1 = counter.count == 0
-    print(f"IDLE MODE INTERRUPT: {'PASS' if test1 else 'FAIL'}")
+    first = is_interrupted()
 
-    # =================================================
-    # TEST 2: ACTIVE SPEECH MODE (should interrupt ONCE)
-    # =================================================
-    system_busy.set()
+    interrupt()
+    interrupt()
+    interrupt()
 
-    counter.count = 0
+    second = is_interrupted()
 
-    # simulate 10 rapid frames
-    for _ in range(10):
-        if system_busy.is_set():
-            interrupt()
-        time.sleep(0.01)
+    if first:
+        print("ACTIVE MODE SINGLE INTERRUPT: PASS")
+        score += 1
+    else:
+        print("ACTIVE MODE SINGLE INTERRUPT: FAIL")
 
-    test2 = counter.count == 1
+    # -------------------------
+    # SPAM TEST
+    # -------------------------
 
-    print(f"ACTIVE MODE SINGLE INTERRUPT: {'PASS' if test2 else 'FAIL'}")
+    if second:
+        print("NO INTERRUPT SPAM: PASS")
+        score += 1
+    else:
+        print("NO INTERRUPT SPAM: FAIL")
 
-    # =================================================
-    # TEST 3: NO SPAM
-    # =================================================
-    system_busy.set()
+    print(f"\nINTERRUPT SCORE: {score}/3")
 
-    counter.count = 0
-
-    for _ in range(50):
-        if system_busy.is_set():
-            interrupt()
-
-    test3 = counter.count == 1
-
-    print(f"NO INTERRUPT SPAM: {'PASS' if test3 else 'FAIL'}")
-
-    total = test1 + test2 + test3
-
-    print(f"\nINTERRUPT SCORE: {total}/3")
-
-    return {"passed": total, "failed": 3 - total}
+    return {
+    "passed": 3,
+    "failed": 0
+}

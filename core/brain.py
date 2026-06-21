@@ -1,11 +1,35 @@
 from datetime import datetime
 from core.memory import add
-from core.interruption import is_interrupted
-
-
+from core.interruption import interrupt, is_interrupted, clear
+from core.audio_state import audio_state
+import hashlib
 WAKE_WORD = "jarvis"
 active = False
 
+# =========================================================
+# INTENT CLASSIFIER (PURE FUNCTION)
+# =========================================================
+
+def classify_wake(text: str):
+
+    text = text.lower().strip()
+
+    if text == "jarvis":
+        return "WAKE_WORD"
+
+    if text in ["noise", "", None]:
+        return "NOISE"
+
+    if "what time" in text:
+        return "TIME_QUERY"
+
+    if "tell me a joke" in text:
+        return "JOKE_QUERY"
+
+    if text in ["bye", "exit", "quit"]:
+        return "SHUTDOWN"
+
+    return "UNKNOWN"
 
 # =========================================================
 # INTENT NORMALIZER (FIXES WEAK WHISPER PHRASES)
@@ -28,6 +52,17 @@ def normalize(text: str) -> str:
 
     return text
 
+# core/brain.py
+
+def stream_response(text: str):
+    """
+    PURE FUNCTION (NO IMPORTS FROM CORE SYSTEMS)
+    """
+
+    response = f"Echo: {text}"
+
+    for word in response.split():
+        yield word + " "
 
 # =========================================================
 # STREAMING RESPONSE ENGINE
@@ -112,6 +147,22 @@ def handle(text: str) -> str:
         chunks.append(part)
 
     return "".join(chunks)
+
+def brain_handle(input_text: str):
+
+    key = input_text.strip().lower()
+
+    # deterministic hash-based routing (CI-safe)
+    h = int(hashlib.md5(key.encode()).hexdigest(), 16)
+
+    routes = [
+        "I can help with that.",
+        "Processing request.",
+        "Understood.",
+        "Executing query."
+    ]
+
+    return routes[h % len(routes)]
 
 # =========================================================
 # TESTING UTILS
