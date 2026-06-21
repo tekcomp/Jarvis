@@ -79,6 +79,9 @@ async def cognitive_loop():
         try:
             L3("AUDIO RECEIVED")
 
+            if len(audio) < 2000:
+                continue
+
             text = await asyncio.to_thread(transcribe, audio)
 
             if not text:
@@ -119,6 +122,7 @@ def vad_producer():
 # MAIN
 # =========================================================
 def main():
+    warmup_whisper()
 
     print("[SYSTEM] BOOTING JARVIS COGNITIVE LOOP v2")
     print("[SYSTEM] STREAMING MODE ACTIVE\n")
@@ -150,7 +154,20 @@ def main():
         tts_thread.join(timeout=2)
 
         print("[SYSTEM] SHUTDOWN COMPLETE")
+        
+# =========================================================
+# WARMUP WHISPER
+# =========================================================
+def warmup_whisper():
+    try:
+        import numpy as np
+        from stt.whisper import transcribe
 
+        silent = np.zeros(16000, dtype=np.int16)
 
+        _ = transcribe(silent)
+
+    except:
+        pass
 if __name__ == "__main__":
     main()

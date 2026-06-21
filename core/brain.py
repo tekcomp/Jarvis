@@ -2,10 +2,12 @@ from datetime import datetime
 from core.memory import add
 
 WAKE_WORD = "jarvis"
-
 active = False
 
 
+# =========================================================
+# RESET (CI SAFE)
+# =========================================================
 def reset():
     global active
     active = False
@@ -17,6 +19,10 @@ def reset():
 def _process(text: str) -> str:
 
     text = text.strip().lower()
+
+    # stricter noise filter
+    if not text or len(text.split()) < 2:
+        return ""
 
     add("user", text)
 
@@ -31,7 +37,10 @@ def _process(text: str) -> str:
     # -----------------------------------------------------
     # DATE
     # -----------------------------------------------------
-    elif "date" in text or "today" in text:
+    elif "date" in text:
+        response = f"Today is {datetime.now().strftime('%A %B %d')}."
+
+    elif "today" in text and "date" in text:
         response = f"Today is {datetime.now().strftime('%A %B %d')}."
 
     # -----------------------------------------------------
@@ -50,7 +59,7 @@ def _process(text: str) -> str:
         response = "Weather module not connected yet."
 
     # -----------------------------------------------------
-    # DEMO COMMANDS
+    # DEMO
     # -----------------------------------------------------
     elif "what can you do" in text:
         response = (
@@ -68,7 +77,7 @@ def _process(text: str) -> str:
     # -----------------------------------------------------
     # EXIT
     # -----------------------------------------------------
-    elif any(x in text for x in ["bye", "goodbye", "stop listening"]):
+    elif "bye" in text or "goodbye" in text or "stop listening" in text:
         global active
         active = False
         response = "Going idle."
@@ -80,7 +89,6 @@ def _process(text: str) -> str:
         response = "I didn't understand that clearly."
 
     add("assistant", response)
-
     return response
 
 
@@ -97,15 +105,14 @@ def handle(text: str) -> str:
     raw = text.lower().strip()
 
     # -----------------------------------------------------
-    # WAKE WORD
+    # WAKE WORD MODE
     # -----------------------------------------------------
     if WAKE_WORD in raw:
 
         active = True
-
         cleaned = raw.replace(WAKE_WORD, "").strip(",. ")
 
-        if cleaned == "":
+        if not cleaned:
             response = "Yes?"
             add("assistant", response)
             return response
@@ -119,19 +126,11 @@ def handle(text: str) -> str:
         return _process(raw)
 
     # -----------------------------------------------------
-    # PASSIVE COMMANDS
+    # PASSIVE MODE (STRICT FILTER)
     # -----------------------------------------------------
-    if any(
-        x in raw
-        for x in [
-            "time",
-            "date",
-            "today",
-            "joke",
-            "weather",
-            "demo",
-        ]
-    ):
+    passive_triggers = ("time", "date", "today", "joke", "weather", "demo")
+
+    if any(t in raw for t in passive_triggers):
         return _process(raw)
 
     return ""

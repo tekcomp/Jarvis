@@ -48,7 +48,7 @@ def is_valid_audio(buffer):
 
     avg_energy = total_energy / len(buffer)
 
-    if avg_energy < MIN_AVG_ENERGY:
+    if avg_energy < MIN_AVG_ENERGY * 1.5:
         return False
 
     if len(buffer) < 8:
@@ -141,9 +141,9 @@ def get_speech_frames():
 
                     buffer.append(audio)
 
-                    if silence >= MAX_SILENCE:
+                    if silence >= max(4, MAX_SILENCE // 2):
 
-                        if is_valid_audio(buffer):
+                        if is_valid_audio(buffer) and len(buffer) >= 12:
 
                             final_audio = np.concatenate(buffer)
 
