@@ -5,11 +5,12 @@ import time
 
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
-from core.brain import handle
+from core.brain import stream_response
 from tts.voice import speak
 
 from core.audio_state import audio_state
 from core.shutdown import is_shutdown, trigger_shutdown
+from core.interruption import interrupt, is_interrupted
 
 
 # =========================================================
@@ -22,7 +23,7 @@ system_busy = threading.Event()
 
 
 # =========================================================
-# TTS ENGINE (INTERRUPTIBLE CORE)
+# TTS ENGINE (INTERRUPT SAFE)
 # =========================================================
 def tts_worker():
 
@@ -39,7 +40,7 @@ def tts_worker():
         try:
             system_busy.set()
 
-            audio_state.start_speaking(hold_seconds=1.5)
+            audio_state.start_speaking(hold_seconds=1.2)
 
             print(f"[JARVIS TTS] {text}")
 
@@ -54,7 +55,7 @@ def tts_worker():
 
 
 # =========================================================
-# COGNITIVE ENGINE (STREAM LOOP)
+# COGNITIVE ENGINE (STREAMING + INTERRUPTIBLE)
 # =========================================================
 async def cognitive_loop():
 
@@ -68,7 +69,7 @@ async def cognitive_loop():
         if audio is None:
             break
 
-        # ignore audio while speaking
+        # ignore if speaking
         if system_busy.is_set():
             continue
 
@@ -80,20 +81,47 @@ async def cognitive_loop():
 
             print(f"[HEARD] {text}")
 
-            response = handle(text)
+            # =================================================
+            # STREAMING BRAIN (NEW v3.1)
+            # =================================================
+            response_stream = stream_response(text)
 
-            if response:
-                print(f"[JARVIS] {response}")
-                tts_queue.put(response)
+            final_text = ""
+
+            for chunk in response_stream:
+
+                # 🔥 INTERRUPT CHECK (CRITICAL)
+                if is_interrupted():
+                    print("[JARVIS] INTERRUPTED")
+                    final_text = ""
+                    break
+
+                final_text += chunk
+                print(f"[JARVIS STREAM] {chunk}")
+
+                await asyncio.sleep(0)
+
+            # =================================================
+            # FINAL OUTPUT
+            # =================================================
+            if final_text and not is_interrupted():
+                print(f"[JARVIS FINAL] {final_text}")
+                tts_queue.put(final_text)
 
         except Exception as e:
             print(f"[PIPELINE ERROR] {e}")
 
 
+    print("[COGNITIVE] LOOP EXIT")
+
+
 # =========================================================
-# VAD PRODUCER
+# VAD PRODUCER (INTERRUPT HOOK ADDED)
 # =========================================================
 def vad_loop():
+
+    speech_active = False
+    speech_lock_frames = 0
 
     try:
         for audio in get_speech_frames():
@@ -101,19 +129,45 @@ def vad_loop():
             if is_shutdown():
                 break
 
+            # =================================================
+            # INTERRUPT ONLY WHEN SPEAKING
+            # =================================================
+            if system_busy.is_set():
+                interrupt()
+                audio_state.on_interrupt()
+
+            # =================================================
+            # HYSTERESIS SPEECH DETECTION FIX
+            # =================================================
+            energy = len(audio)  # simple proxy (replace if RMS available)
+
+            if energy > 0:
+
+                speech_lock_frames += 1
+
+                if not speech_active and speech_lock_frames > 3:
+                    speech_active = True
+                    print("[VAD] SPEECH START")
+
+            else:
+
+                if speech_active:
+                    speech_active = False
+                    speech_lock_frames = 0
+                    print("[VAD] SPEECH END")
+
             audio_queue.put(audio)
 
     finally:
         print("[VAD] EXIT")
-
 
 # =========================================================
 # KERNEL START
 # =========================================================
 def start_kernel():
 
-    print("[SYSTEM] BOOTING JARVIS ALIVE CORE v3")
-    print("[SYSTEM] EVENT KERNEL ACTIVE\n")
+    print("[SYSTEM] BOOTING JARVIS ALIVE CORE v3.1")
+    print("[SYSTEM] STREAMING + INTERRUPT MODE ACTIVE\n")
 
     threading.Thread(target=vad_loop, daemon=True).start()
     threading.Thread(target=tts_worker, daemon=True).start()
