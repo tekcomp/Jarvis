@@ -3,11 +3,11 @@ from core.brain import handle, reset
 
 
 STREAM = [
-    "random noise",
-    "jarvis",
-    "what time is it",
-    "tell me a joke",
-    "bye",
+    ("random noise", False),
+    ("jarvis", True),
+    ("what time is it", True),
+    ("tell me a joke", True),
+    ("bye", True),
 ]
 
 
@@ -15,19 +15,33 @@ def run_wake_tests():
 
     print("\n[CI] WAKE STREAM TESTS")
 
-    reset()   # 🔥 IMPORTANT FIX
+    reset()
 
     passed = 0
     failed = 0
 
-    for msg in STREAM:
+    for msg, should_respond in STREAM:
 
         response = handle(msg)
 
-        if response:
-            passed += 1
+        # =====================================================
+        # CORRECT ASSERTION LOGIC
+        # =====================================================
+        if should_respond:
+
+            if response:
+                passed += 1
+            else:
+                failed += 1
+
         else:
-            failed += 1
+            # noise should NOT respond
+            if response == "":
+                passed += 1
+            else:
+                failed += 1
+
+        print(f"[WAKE TEST] input={msg} response={response}")
 
         time.sleep(0.01)
 
