@@ -1,3 +1,11 @@
+import sys
+import os
+
+ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..")
+)
+sys.path.insert(0, ROOT)
+
 from core.brain import handle
 
 
@@ -42,18 +50,35 @@ def run_brain_tests():
 
     for text, expected in TESTS:
 
-        # reset brain state
         import core.brain as brain
         brain.active = False
 
         output = handle(text)
         result = classify(output)
 
+        print(
+            f"INPUT={text} "
+            f"EXPECTED={expected} "
+            f"RESULT={result} "
+            f"OUTPUT={output}"
+        )
+
         if result == expected:
             passed += 1
         else:
             failed += 1
 
+            print(
+                f"\nFAIL:"
+                f"\n  input={text}"
+                f"\n  expected={expected}"
+                f"\n  result={result}"
+                f"\n  output={output}"
+            )
+
     print(f"Brain: {passed} passed / {failed} failed")
 
     return {"passed": passed, "failed": failed}
+
+if __name__ == "__main__":
+    run_brain_tests()

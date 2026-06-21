@@ -71,6 +71,6 @@ def run_interrupt_test():
     print(f"\nINTERRUPT SCORE: {score}/3")
 
     return {
-    "passed": 3,
-    "failed": 0
-}
+        "passed": score,
+        "failed": 3 - score
+    }
