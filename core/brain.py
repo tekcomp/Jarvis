@@ -1,52 +1,94 @@
 from datetime import datetime
-from core.memory import add, get_context
+from collections import deque
+from core.memory import add
 
+# =========================================================
+# CONFIG
+# =========================================================
 WAKE_WORD = "jarvis"
 
 active = False
 
+# lightweight context window (last N turns)
+context_window = deque(maxlen=6)
+
 
 # =========================================================
-# CORE PROCESSOR
+# MEMORY HELPERS
+# =========================================================
+def _remember(role: str, text: str):
+    """
+    Stores structured conversation context
+    """
+    entry = f"{role}: {text}"
+    context_window.append(entry)
+    add(role, text)
+
+
+def _get_context() -> str:
+    """
+    Returns short rolling context (future LLM-ready)
+    """
+    return "\n".join(context_window)
+
+
+# =========================================================
+# INTENT ENGINE
 # =========================================================
 def _process(text: str) -> str:
 
-    text = text.strip()
+    text = text.strip().lower()
 
-    # store user input in memory
-    add("user", text)
+    _remember("user", text)
 
-    response = ""
+    response = None
 
     # -------------------------
-    # INTENT ROUTING
+    # TIME
     # -------------------------
     if "time" in text:
         response = f"The time is {datetime.now().strftime('%H:%M')}."
 
+    # -------------------------
+    # DATE
+    # -------------------------
     elif "date" in text:
         response = f"Today is {datetime.now().strftime('%A %B %d')}."
 
+    # -------------------------
+    # JOKE
+    # -------------------------
     elif "joke" in text:
         response = "Why did the AI cross the road? To optimize the reward function."
 
+    # -------------------------
+    # WEATHER (stub)
+    # -------------------------
     elif "weather" in text:
         response = "Weather module not connected yet."
 
+    # -------------------------
+    # EXIT
+    # -------------------------
     elif any(x in text for x in ["bye", "goodbye", "stop listening"]):
         response = "Going idle."
 
+        global active
+        active = False
+
+    # -------------------------
+    # UNKNOWN
+    # -------------------------
     else:
         response = "I didn't understand that clearly."
 
-    # store assistant response in memory
-    add("assistant", response)
+    _remember("assistant", response)
 
     return response
 
 
 # =========================================================
-# ENTRY POINT
+# ENTRY POINT (Cognitive Router)
 # =========================================================
 def handle(text: str) -> str:
 
@@ -66,26 +108,23 @@ def handle(text: str) -> str:
 
         cleaned = raw.replace(WAKE_WORD, "").strip(",. ")
 
-        # wake only
-        if cleaned == "":
+        if not cleaned:
             response = "Yes?"
-            add("assistant", response)
+            _remember("assistant", response)
             return response
 
         return _process(cleaned)
 
     # =====================================================
-    # ACTIVE MODE (CONVERSATION STATE)
+    # ACTIVE MODE (FULL CONVERSATION)
     # =====================================================
     if active:
         return _process(raw)
 
     # =====================================================
-    # PASSIVE MODE (LIGHT FILTER ONLY)
+    # PASSIVE MODE (LIGHT ROUTING ONLY)
     # =====================================================
-    # allow only simple direct commands
     if any(x in raw for x in ["time", "date", "joke", "weather"]):
         return _process(raw)
 
-    # ignore everything else
     return ""

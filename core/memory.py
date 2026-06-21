@@ -1,21 +1,34 @@
+# core/memory.py
 from collections import deque
+from datetime import datetime
 
-# keeps last N exchanges
-MAX_MEMORY = 10
+# =========================================================
+# SIMPLE IN-MEMORY CONTEXT BUFFER (NO DATABASE YET)
+# =========================================================
 
-memory = deque(maxlen=MAX_MEMORY)
+MAX_MEMORY = 50
+
+_memory = deque(maxlen=MAX_MEMORY)
 
 
 def add(role: str, text: str):
-    memory.append((role, text))
+    """
+    Store conversation turn
+    role: 'user' | 'assistant'
+    """
+    _memory.append({
+        "role": role,
+        "text": text,
+        "time": datetime.now().isoformat()
+    })
 
 
-def get_context() -> str:
+def get_context(limit: int = 10):
     """
-    Converts memory into prompt-ready context block
+    Return last N messages for context injection later
     """
-    return "\n".join([f"{r}: {t}" for r, t in memory])
+    return list(_memory)[-limit:]
 
 
 def clear():
-    memory.clear()
+    _memory.clear()
