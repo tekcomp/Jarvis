@@ -122,6 +122,9 @@ def vad_loop():
 
     speech_active = False
     speech_lock_frames = 0
+    interrupt_lock = False
+
+    speech_session = False   # 🔥 NEW: global latch per utterance
 
     try:
         for audio in get_speech_frames():
@@ -130,31 +133,48 @@ def vad_loop():
                 break
 
             # =================================================
-            # INTERRUPT ONLY WHEN SPEAKING
+            # INTERRUPT (SAFE SINGLE FIRE)
             # =================================================
-            if system_busy.is_set():
+            if system_busy.is_set() and not interrupt_lock:
                 interrupt()
                 audio_state.on_interrupt()
+                interrupt_lock = True
+
+            elif not system_busy.is_set():
+                interrupt_lock = False
 
             # =================================================
-            # HYSTERESIS SPEECH DETECTION FIX
+            # ENERGY DETECTION
             # =================================================
-            energy = len(audio)  # simple proxy (replace if RMS available)
+            energy = len(audio)
 
             if energy > 0:
 
                 speech_lock_frames += 1
 
+                # =================================================
+                # SPEECH START (ONLY ONCE PER SESSION)
+                # =================================================
                 if not speech_active and speech_lock_frames > 3:
+
                     speech_active = True
-                    print("[VAD] SPEECH START")
+
+                    if not speech_session:
+                        speech_session = True
+                        print("[VAD] SPEECH START")
 
             else:
 
                 if speech_active:
                     speech_active = False
                     speech_lock_frames = 0
+
                     print("[VAD] SPEECH END")
+
+                    # =================================================
+                    # RESET SESSION ONLY AFTER FULL END
+                    # =================================================
+                    speech_session = False
 
             audio_queue.put(audio)
 
@@ -181,9 +201,10 @@ def start_kernel():
     finally:
         trigger_shutdown("kernel exit")
 
-        audio_queue.put(None)
-        tts_queue.put(None)
-
-        time.sleep(0.5)
+        try:
+            audio_queue.put(None)
+            tts_queue.put(None)
+        except:
+            pass
 
         print("[SYSTEM] KERNEL SHUTDOWN COMPLETE")

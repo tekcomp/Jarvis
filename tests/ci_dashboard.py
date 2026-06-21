@@ -6,90 +6,65 @@ import os
 class CIDashboard:
 
     def __init__(self):
-        self.results = {}
+        # MUST exist before add() is called
+        self.items = {}
 
-    # -----------------------------------------------------
-    # STORE RESULT
-    # -----------------------------------------------------
-    def add(self, name: str, passed: int, failed: int):
-        self.results[name] = {
+    # =====================================================
+    # ADD MODULE SCORE
+    # =====================================================
+    def add(self, name, passed, failed, weight=1):
+
+        if not hasattr(self, "items"):
+            self.items = {}
+
+        self.items[name] = {
             "passed": passed,
             "failed": failed,
-            "score": self._score(passed, failed)
+            "weight": weight
         }
 
-    # -----------------------------------------------------
-    # SCORE CALCULATION
-    # -----------------------------------------------------
-    def _score(self, p, f):
-        total = p + f
-        if total == 0:
-            return 0
-        return round((p / total) * 100, 2)
-
-    # -----------------------------------------------------
-    # WEIGHTED SYSTEM SCORE
-    # -----------------------------------------------------
+    # =====================================================
+    # TOTAL SCORE CALCULATION
+    # =====================================================
     def total_score(self):
 
-        weights = {
-            "brain": 0.25,
-            "pipeline": 0.25,
-            "wake": 0.20,
-            "latency": 0.15,
-            "memory": 0.10,
-            "noise": 0.05
-        }
+        total_weight = 0
+        weighted_score = 0
 
-        total = 0.0
+        for name, v in self.items.items():
 
-        for k, v in self.results.items():
-            weight = weights.get(k, 0)
-            total += v["score"] * weight
+            total = v["passed"] + v["failed"]
+            if total == 0:
+                continue
 
-        return round(total, 2)
+            ratio = v["passed"] / total
+            weighted_score += ratio * v["weight"]
+            total_weight += v["weight"]
 
-    # -----------------------------------------------------
-    # VISUAL BAR
-    # -----------------------------------------------------
-    def _bar(self, score):
+        if total_weight == 0:
+            return 0
 
-        filled = int(score // 10)
-        empty = 10 - filled
+        return int((weighted_score / total_weight) * 100)
 
-        return "█" * filled + "░" * empty
-
-    # -----------------------------------------------------
-    # PRINT DASHBOARD
-    # -----------------------------------------------------
+    # =====================================================
+    # DASHBOARD RENDER
+    # =====================================================
     def render(self):
 
-        print("\n===================================")
-        print(" JARVIS CI LIVE DASHBOARD")
-        print("===================================\n")
+        print("\n[CI DASHBOARD]\n")
 
-        for k, v in self.results.items():
+        for name, v in self.items.items():
+            total = v["passed"] + v["failed"]
+            print(
+                f"{name.upper():10} | "
+                f"{v['passed']}/{total} "
+                f"| weight={v['weight']}"
+            )
 
-            bar = self._bar(v["score"])
+        print("\n")
 
-            print(f"{k.upper():10} | {bar} | {v['score']}%")
-
-        print("\n-----------------------------------")
-        print(f"TOTAL SCORE: {self.total_score()} / 100")
-        print("-----------------------------------\n")
-
-    # -----------------------------------------------------
-    # EXPORT JSON (future GUI hook)
-    # -----------------------------------------------------
-    def export(self, path="ci_report.json"):
-
-        data = {
-            "timestamp": time.time(),
-            "results": self.results,
-            "total_score": self.total_score()
-        }
-
-        with open(path, "w") as f:
-            json.dump(data, f, indent=4)
-
-        print(f"[CI] REPORT EXPORTED → {path}")
+    # =====================================================
+    # EXPORT (future use)
+    # =====================================================
+    def export(self):
+        pass
