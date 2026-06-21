@@ -1,3 +1,8 @@
+import asyncio
+import threading
+import time
+import queue
+
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
 from core.brain import handle
@@ -6,148 +11,104 @@ from tts.voice import speak
 from core.logger import L3
 from core.audio_state import audio_state
 
-import threading
-import time
-import re
 
 # =========================================================
-# SYSTEM LOCKS
+# COGNITIVE QUEUES
 # =========================================================
-pipeline_lock = threading.Lock()
-tts_lock = threading.Lock()
+audio_queue = queue.Queue()
+tts_queue = queue.Queue()
+
 system_busy = threading.Event()
 
 
 # =========================================================
-# INPUT NORMALIZER (NEW CRITICAL LAYER)
+# ASYNC TTS WORKER (NON-BLOCKING SPEECH ENGINE)
 # =========================================================
-def normalize_text(text: str) -> str:
-    if not text:
-        return ""
+def tts_worker():
+    while True:
+        text = tts_queue.get()
 
-    text = text.lower().strip()
+        if text is None:
+            break
 
-    # remove repeated consecutive words (basic de-dupe)
-    words = text.split()
-    deduped = []
-    for w in words:
-        if not deduped or deduped[-1] != w:
-            deduped.append(w)
-    text = " ".join(deduped)
-
-    # remove non-ascii noise (foreign scripts, broken whisper fragments)
-    if re.search(r"[^\x00-\x7F]+", text):
-        return ""
-
-    # ignore very short garbage
-    if len(text.strip()) < 3:
-        return ""
-
-    return text
-
-
-# =========================================================
-# TTS WRAPPER
-# =========================================================
-def safe_speak(text: str):
-    if not text:
-        return
-
-    if not tts_lock.acquire(blocking=False):
-        return
-
-    try:
-        system_busy.set()
-
-        audio_state.start_speaking(hold_seconds=2.0)
-
-        print(f"[JARVIS TTS] {text}")
-
-        speak(text)
-
-    except Exception as e:
-        print(f"[TTS ERROR] {e}")
-
-    finally:
         try:
+            system_busy.set()
+
+            audio_state.start_speaking(hold_seconds=2.0)
+
+            print(f"[JARVIS TTS] {text}")
+
+            speak(text)
+
+        except Exception as e:
+            print(f"[TTS ERROR] {e}")
+
+        finally:
             audio_state.stop_speaking()
-        except Exception:
-            pass
+            system_busy.clear()
+            time.sleep(0.1)
 
-        system_busy.clear()
-
-        time.sleep(0.15)
-
-        tts_lock.release()
+        tts_queue.task_done()
 
 
 # =========================================================
-# PIPELINE
+# STT + BRAIN PROCESSOR (ASYNC LOOP)
 # =========================================================
-def safe_pipeline(audio):
+async def cognitive_loop():
 
-    if system_busy.is_set():
-        return
+    while True:
 
-    if not pipeline_lock.acquire(blocking=False):
-        return
+        audio = await asyncio.to_thread(audio_queue.get)
 
-    try:
-        L3("AUDIO RECEIVED FROM VAD")
+        if audio is None:
+            break
 
-        # -------------------------
-        # STT
-        # -------------------------
-        text = transcribe(audio)
+        try:
+            L3("AUDIO RECEIVED")
 
-        # NEW: CLEAN INPUT BEFORE BRAIN
-        text = normalize_text(text)
+            # STT (offload thread)
+            text = await asyncio.to_thread(transcribe, audio)
 
-        if not text:
-            L3("WHISPER EMPTY / NOISE FILTERED")
-            return
+            if not text:
+                continue
 
-        print(f"[HEARD] {text}")
+            print(f"[HEARD] {text}")
 
-        # -------------------------
-        # BRAIN
-        # -------------------------
-        response = handle(text)
+            # BRAIN
+            response = handle(text)
 
-        if not response:
-            return
+            if response:
+                print(f"[JARVIS] {response}")
+                tts_queue.put(response)
 
-        print(f"[JARVIS] {response}")
-
-        # -------------------------
-        # TTS
-        # -------------------------
-        safe_speak(response)
-
-    except Exception as e:
-        print(f"[PIPELINE ERROR] {e}")
-
-    finally:
-        pipeline_lock.release()
+        except Exception as e:
+            print(f"[PIPELINE ERROR] {e}")
 
 
 # =========================================================
-# MAIN LOOP
+# VAD PRODUCER THREAD
+# =========================================================
+def vad_producer():
+    for audio in get_speech_frames():
+        audio_queue.put(audio)
+
+
+# =========================================================
+# MAIN ENTRY
 # =========================================================
 def main():
 
-    print("[SYSTEM] BOOTING JARVIS CORE")
-    print("[SYSTEM] LISTENING...\n")
+    print("[SYSTEM] BOOTING JARVIS COGNITIVE LOOP v2")
+    print("[SYSTEM] STREAMING MODE ACTIVE\n")
 
-    try:
-        for audio in get_speech_frames():
-            safe_pipeline(audio)
+    # start VAD thread
+    threading.Thread(target=vad_producer, daemon=True).start()
 
-    except KeyboardInterrupt:
-        print("\n[SYSTEM] SHUTDOWN REQUESTED")
+    # start TTS worker
+    threading.Thread(target=tts_worker, daemon=True).start()
 
-    except Exception as e:
-        print(f"[FATAL ERROR] {e}")
+    # start async cognitive loop
+    asyncio.run(cognitive_loop())
 
 
 if __name__ == "__main__":
