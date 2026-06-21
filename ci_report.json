@@ -1,0 +1,36 @@
+{
+    "timestamp": 1782017875.3877602,
+    "results": {
+        "brain": {
+            "passed": 6,
+            "failed": 0,
+            "score": 100.0
+        },
+        "pipeline": {
+            "passed": 4,
+            "failed": 0,
+            "score": 100.0
+        },
+        "wake": {
+            "passed": 4,
+            "failed": 1,
+            "score": 80.0
+        },
+        "latency": {
+            "passed": 1,
+            "failed": 0,
+            "score": 100.0
+        },
+        "memory": {
+            "passed": 1,
+            "failed": 0,
+            "score": 100.0
+        },
+        "noise": {
+            "passed": 1,
+            "failed": 0,
+            "score": 100.0
+        }
+    },
+    "total_score": 96.0
+}
