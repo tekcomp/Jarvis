@@ -1,38 +1,17 @@
 # ==============================
-# core/brain.py (CONTRACT STABLE LAYER v3)
+# core/brain.py (PURE LOGIC LAYER v4)
 # ==============================
 
 import datetime
 
-# =========================================================
-# INTERNAL STATE (FOR FUTURE EXPANSION)
-# =========================================================
-_internal_state = {
-    "session_active": True
-}
+_state = {}
 
 
-# =========================================================
-# RESET HOOK (CI REQUIRED)
-# =========================================================
 def reset():
-    """
-    CI lifecycle reset hook.
-    Clears transient brain state between tests or sessions.
-    """
-
-    global _internal_state
-
-    _internal_state = {
-        "session_active": True
-    }
-
-    print("[BRAIN] RESET COMPLETE")
+    global _state
+    _state = {}
 
 
-# =========================================================
-# CORE RESPONSE ENGINE
-# =========================================================
 def generate_response(text: str) -> str:
 
     t = text.lower().strip()
@@ -51,23 +30,9 @@ def generate_response(text: str) -> str:
     return f"You said: {text}"
 
 
-# =========================================================
-# STREAMING WRAPPER (CI / TTS)
-# =========================================================
 def stream_response(text: str):
 
     response = generate_response(text)
 
     for token in response.split():
         yield token + " "
-
-
-# =========================================================
-# CI ENTRYPOINT
-# =========================================================
-def handle(text: str) -> str:
-    """
-    CI synchronous entrypoint.
-    """
-
-    return generate_response(text)

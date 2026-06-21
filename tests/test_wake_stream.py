@@ -1,5 +1,5 @@
 import time
-from core.brain import handle, reset
+from core.contract import handle, reset
 
 
 STREAM = [

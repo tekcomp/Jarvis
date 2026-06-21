@@ -1,5 +1,5 @@
 import time
-from core.brain import handle
+from core.contract import handle
 
 
 MOCK_AUDIO_INPUTS = [

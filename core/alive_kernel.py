@@ -10,7 +10,7 @@ import numpy as np
 
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
-from core.brain import stream_response
+from core.contract import handle, stream
 from tts.voice import speak
 
 from core.runtime_state import system_busy
@@ -164,7 +164,7 @@ async def cognitive_loop():
         # =============================
         final_text = ""
 
-        for chunk in stream_response(text):
+        for chunk in stream(text):
 
             if is_interrupted():
                 final_text = ""
