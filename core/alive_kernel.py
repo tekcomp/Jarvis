@@ -3,6 +3,7 @@
 # ==============================
 
 import asyncio
+from pydoc import text
 import queue
 import threading
 import time
@@ -18,6 +19,13 @@ from core.interruption import is_interrupted
 from core.interrupt_fsm import InterruptFSM
 from core.audio_state import audio_state
 
+from core.personality_engine_v2 import PersonalityEngineV2
+from core.response_guard import ResponseGuard
+
+
+response_guard = ResponseGuard()
+
+personality = PersonalityEngineV2()
 
 # =========================================================
 # GLOBAL FSM
@@ -131,6 +139,12 @@ async def cognitive_loop():
 
         text = transcribe(audio)
 
+        if response_guard.should_block(text):
+            print("[CI-GUARD] BLOCKED DUPLICATE INTENT")
+            continue
+
+        personality.update(text)
+
         if not text or len(text.strip()) < 2:
             continue
 
@@ -138,7 +152,10 @@ async def cognitive_loop():
 
         final_text = ""
 
-        for chunk in stream_response(text):
+        for chunk in stream_response(
+            text,
+            system_prompt=personality.system_prompt()
+        ):
 
             if is_interrupted():
                 final_text = ""
@@ -148,6 +165,7 @@ async def cognitive_loop():
 
         if final_text and not is_interrupted():
             print(f"[CI-TTS] QUEUE_PUSH: {final_text}")
+            response_guard.update(text, final_text)
             tts_queue.put(final_text)
 
 
