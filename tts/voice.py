@@ -1,14 +1,39 @@
 import pyttsx3
+import threading
+import time
+
+_lock = threading.Lock()
+
 
 def speak(text: str):
-    print("[TTS TEST] creating engine")
+    if not text:
+        return
 
-    engine = pyttsx3.init()   # NEW ENGINE EVERY TIME
-    engine.setProperty("rate", 180)
+    if not _lock.acquire(blocking=False):
+        return
 
-    print("[TTS TEST] speaking:", text)
+    try:
+        print("[TTS TEST] speaking:", text)
 
-    engine.say(text)
-    engine.runAndWait()
+        # 🔥 CRITICAL FIX: fresh engine per call (Windows-safe)
+        engine = pyttsx3.init()
 
-    print("[TTS TEST] done")
+        engine.setProperty("rate", 180)
+        engine.setProperty("volume", 1.0)
+
+        engine.say(text)
+        engine.runAndWait()
+
+        # HARD cleanup (prevents silent deadlock)
+        engine.stop()
+        del engine
+
+        time.sleep(0.1)
+
+        print("[TTS TEST] done")
+
+    except Exception as e:
+        print(f"[TTS ERROR] {e}")
+
+    finally:
+        _lock.release()

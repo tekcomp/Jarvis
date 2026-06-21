@@ -1,31 +1,53 @@
 from datetime import datetime
+from core.memory import add, get_context
 
 WAKE_WORD = "jarvis"
+
 active = False
 
 
+# =========================================================
+# CORE PROCESSOR
+# =========================================================
 def _process(text: str) -> str:
 
     text = text.strip()
 
+    # store user input in memory
+    add("user", text)
+
+    response = ""
+
+    # -------------------------
+    # INTENT ROUTING
+    # -------------------------
     if "time" in text:
-        return f"The time is {datetime.now().strftime('%H:%M')}."
+        response = f"The time is {datetime.now().strftime('%H:%M')}."
 
-    if "date" in text:
-        return f"Today is {datetime.now().strftime('%A %B %d')}."
+    elif "date" in text:
+        response = f"Today is {datetime.now().strftime('%A %B %d')}."
 
-    if "joke" in text:
-        return "Why did the AI cross the road? To optimize the reward function."
+    elif "joke" in text:
+        response = "Why did the AI cross the road? To optimize the reward function."
 
-    if "weather" in text:
-        return "Weather module not connected yet."
+    elif "weather" in text:
+        response = "Weather module not connected yet."
 
-    if "bye" in text or "goodbye" in text:
-        return "Going idle."
+    elif any(x in text for x in ["bye", "goodbye", "stop listening"]):
+        response = "Going idle."
 
-    return "I didn't understand that clearly."
+    else:
+        response = "I didn't understand that clearly."
+
+    # store assistant response in memory
+    add("assistant", response)
+
+    return response
 
 
+# =========================================================
+# ENTRY POINT
+# =========================================================
 def handle(text: str) -> str:
 
     global active
@@ -35,30 +57,35 @@ def handle(text: str) -> str:
 
     raw = text.lower().strip()
 
-    # -------------------------
-    # WAKE WORD MODE
-    # -------------------------
+    # =====================================================
+    # WAKE WORD DETECTION
+    # =====================================================
     if WAKE_WORD in raw:
+
         active = True
 
         cleaned = raw.replace(WAKE_WORD, "").strip(",. ")
 
-        if cleaned:
-            return _process(cleaned)
+        # wake only
+        if cleaned == "":
+            response = "Yes?"
+            add("assistant", response)
+            return response
 
-        return "Yes?"
+        return _process(cleaned)
 
-    # -------------------------
-    # IMPORTANT FIX: ALWAYS ALLOW COMMANDS
-    # -------------------------
+    # =====================================================
+    # ACTIVE MODE (CONVERSATION STATE)
+    # =====================================================
     if active:
         return _process(raw)
 
-    # -------------------------
-    # PASSIVE MODE (CRITICAL FIX)
-    # -------------------------
-    # allow basic commands even without wake word
+    # =====================================================
+    # PASSIVE MODE (LIGHT FILTER ONLY)
+    # =====================================================
+    # allow only simple direct commands
     if any(x in raw for x in ["time", "date", "joke", "weather"]):
         return _process(raw)
 
+    # ignore everything else
     return ""

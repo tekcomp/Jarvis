@@ -4,52 +4,77 @@ from core.brain import handle
 from tts.voice import speak
 
 from core.logger import L3
+from core.audio_state import audio_state
+
 import threading
 import time
 
+# =========================================================
+# SYSTEM LOCKS
+# =========================================================
 
-# -------------------------
-# GLOBAL EXECUTION GUARD
-# -------------------------
-tts_lock = threading.Lock()
 pipeline_lock = threading.Lock()
+tts_lock = threading.Lock()
+
+system_busy = threading.Event()
 
 
+# =========================================================
+# TTS WRAPPER (LOW LATENCY + SAFE)
+# =========================================================
 def safe_speak(text: str):
-    """
-    Hard-safe TTS wrapper:
-    - prevents overlap
-    - ensures mic suppression state is respected
-    - prevents double execution
-    """
-
     if not text:
         return
 
-    # prevent multiple concurrent TTS calls
+    # avoid double TTS execution
     if not tts_lock.acquire(blocking=False):
         return
 
     try:
+        system_busy.set()
+
+        # activate mic suppression BEFORE TTS
+        audio_state.start_speaking(hold_seconds=2.0)
+
+        print(f"[JARVIS TTS] {text}")
+
         speak(text)
-        time.sleep(0.2)  # recovery buffer for mic release
+
+    except Exception as e:
+        print(f"[TTS ERROR] {e}")
+
     finally:
-        if tts_lock.locked():
-            tts_lock.release()
+        # ALWAYS release mic + system state
+        try:
+            audio_state.stop_speaking()
+        except Exception:
+            pass
+
+        system_busy.clear()
+
+        time.sleep(0.15)  # reduced latency buffer
+
+        tts_lock.release()
 
 
+# =========================================================
+# PIPELINE (DROP-OLD AUDIO MODEL)
+# =========================================================
 def safe_pipeline(audio):
-    """
-    Ensures only one STT → brain → TTS pipeline runs at a time
-    prevents race conditions from fast VAD bursts
-    """
 
-    with pipeline_lock:
+    # CRITICAL: drop audio while speaking
+    if system_busy.is_set():
+        return
 
+    # prevent pipeline stacking
+    if not pipeline_lock.acquire(blocking=False):
+        return
+
+    try:
         L3("AUDIO RECEIVED FROM VAD")
 
         # -------------------------
-        # TRANSCRIBE
+        # STT
         # -------------------------
         text = transcribe(audio)
 
@@ -70,11 +95,20 @@ def safe_pipeline(audio):
         print(f"[JARVIS] {response}")
 
         # -------------------------
-        # TTS (blocking inside safe wrapper)
+        # TTS
         # -------------------------
         safe_speak(response)
 
+    except Exception as e:
+        print(f"[PIPELINE ERROR] {e}")
 
+    finally:
+        pipeline_lock.release()
+
+
+# =========================================================
+# MAIN LOOP
+# =========================================================
 def main():
 
     print("[SYSTEM] BOOTING JARVIS CORE")
@@ -82,14 +116,18 @@ def main():
 
     try:
         for audio in get_speech_frames():
-            try:
-                safe_pipeline(audio)
 
-            except Exception as e:
-                print(f"[PIPELINE ERROR] {e}")
+            # extra safety: ignore stale audio during speech
+            if system_busy.is_set():
+                continue
+
+            safe_pipeline(audio)
 
     except KeyboardInterrupt:
         print("\n[SYSTEM] SHUTDOWN REQUESTED")
+
+    except Exception as e:
+        print(f"[FATAL ERROR] {e}")
 
 
 if __name__ == "__main__":
