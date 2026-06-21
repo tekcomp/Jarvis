@@ -1,42 +1,73 @@
 # ==============================
-# core/brain.py (CIRCULAR IMPORT FIXED)
+# core/brain.py (CONTRACT STABLE LAYER v3)
 # ==============================
 
-import time
+import datetime
+
+# =========================================================
+# INTERNAL STATE (FOR FUTURE EXPANSION)
+# =========================================================
+_internal_state = {
+    "session_active": True
+}
 
 
-def stream_response(text: str):
+# =========================================================
+# RESET HOOK (CI REQUIRED)
+# =========================================================
+def reset():
     """
-    SIMPLE STREAM ENGINE (NO SELF IMPORTS)
-    """
-
-    text = (text or "").lower()
-
-    # simulate streaming tokens
-    response = route_response(text)
-
-    for word in response.split():
-        yield word + " "
-        time.sleep(0.01)
-
-
-def route_response(text: str) -> str:
-    """
-    DETERMINE RESPONSE WITHOUT IMPORTING ANYTHING FROM brain.py
-    (THIS FIXES CIRCULAR IMPORT)
+    CI lifecycle reset hook.
+    Clears transient brain state between tests or sessions.
     """
 
-    # TIME
-    if "time" in text:
-        return f"The time is {time.strftime('%H:%M:%S')}."
+    global _internal_state
 
-    # DATE
-    if "date" in text or "today" in text:
-        return time.strftime("Today is %A, %B %d, %Y.")
+    _internal_state = {
+        "session_active": True
+    }
 
-    # JOKE
-    if "joke" in text:
+    print("[BRAIN] RESET COMPLETE")
+
+
+# =========================================================
+# CORE RESPONSE ENGINE
+# =========================================================
+def generate_response(text: str) -> str:
+
+    t = text.lower().strip()
+
+    if "time" in t:
+        now = datetime.datetime.now().strftime("%H:%M:%S")
+        return f"The time is {now}."
+
+    if "date" in t or "today" in t:
+        today = datetime.datetime.now().strftime("%A, %B %d, %Y")
+        return f"Today is {today}."
+
+    if "joke" in t:
         return "Why did the AI cross the road? To optimize the reward function."
 
-    # DEFAULT
     return f"You said: {text}"
+
+
+# =========================================================
+# STREAMING WRAPPER (CI / TTS)
+# =========================================================
+def stream_response(text: str):
+
+    response = generate_response(text)
+
+    for token in response.split():
+        yield token + " "
+
+
+# =========================================================
+# CI ENTRYPOINT
+# =========================================================
+def handle(text: str) -> str:
+    """
+    CI synchronous entrypoint.
+    """
+
+    return generate_response(text)
