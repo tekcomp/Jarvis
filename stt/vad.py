@@ -2,6 +2,7 @@ import numpy as np
 import pyaudio
 import signal
 from core.logger import L3
+from core.audio_state import audio_state
 
 RATE = 16000
 FRAME_SIZE = 1024
@@ -10,9 +11,8 @@ MIN_RMS = 80
 MAX_SILENCE = 10
 MIN_SPEECH = 6
 
-# -------------------------
-# GLOBAL SAFE SHUTDOWN FLAG
-# -------------------------
+MIN_AVG_ENERGY = 35
+
 running = True
 
 
@@ -40,10 +40,33 @@ def safe_rms(audio):
     return float(np.sqrt(val))
 
 
+# -------------------------
+# AUDIO QUALITY FILTER
+# -------------------------
+def is_valid_audio(buffer):
+
+    if len(buffer) < MIN_SPEECH:
+        return False
+
+    total_energy = 0.0
+
+    for chunk in buffer:
+        total_energy += np.mean(chunk.astype(np.float32) ** 2)
+
+    avg_energy = total_energy / len(buffer)
+
+    if avg_energy < MIN_AVG_ENERGY:
+        return False
+
+    if len(buffer) < 8:
+        return False
+
+    return True
+
+
 def get_speech_frames():
 
     pa = pyaudio.PyAudio()
-
     device_index = pa.get_default_input_device_info()["index"]
 
     stream = pa.open(
@@ -70,8 +93,12 @@ def get_speech_frames():
             frame = stream.read(FRAME_SIZE, exception_on_overflow=False)
             audio = np.frombuffer(frame, dtype=np.int16)
 
-            rms = safe_rms(audio)
+            # 🔥 SAFE ECHO SUPPRESSION (NO FRAME LOSS)
+            if not audio_state.mic_allowed():
+                # replace with silence instead of dropping
+                audio = np.zeros_like(audio)
 
+            rms = safe_rms(audio)
             is_speech = rms > MIN_RMS
 
             # --------------------
@@ -99,11 +126,9 @@ def get_speech_frames():
 
                     if silence >= MAX_SILENCE:
 
-                        if len(buffer) >= MIN_SPEECH:
+                        if is_valid_audio(buffer):
 
                             final_audio = np.concatenate(buffer)
-
-                            # safety cleanup
                             final_audio = np.nan_to_num(final_audio).astype(np.int16)
 
                             L3(f"SPEECH END frames={len(buffer)}")

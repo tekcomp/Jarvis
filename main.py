@@ -4,6 +4,37 @@ from core.brain import handle
 from tts.voice import speak
 
 from core.logger import L3
+from core.audio_state import audio_state
+import threading
+import time
+
+
+# -------------------------
+# TTS EXECUTION LOCK
+# -------------------------
+tts_lock = threading.Lock()
+
+
+def safe_speak(text: str):
+    """
+    Single-threaded TTS execution with proper echo suppression sync
+    """
+
+    if not text:
+        return
+
+    # prevent overlapping speech
+    if tts_lock.locked():
+        return
+
+    with tts_lock:
+
+        try:
+            speak(text)
+
+        finally:
+            # small recovery window ensures mic re-enables cleanly
+            time.sleep(0.15)
 
 
 def main():
@@ -29,13 +60,15 @@ def main():
             print(f"[HEARD] {text}")
 
             # -------------------------
-            # INTENT + RESPONSE
+            # BRAIN PROCESSING
             # -------------------------
             response = handle(text)
 
             if response:
+
                 print(f"[JARVIS] {response}")
-                speak(response)
+
+                safe_speak(response)
 
         except Exception as e:
             print(f"[MAIN ERROR] {e}")

@@ -1,55 +1,31 @@
 from datetime import datetime
-import re
 
 WAKE_WORD = "jarvis"
 active = False
 
 
-# -------------------------
-# CLEAN INPUT
-# -------------------------
-def _clean(text: str) -> str:
-    """
-    Removes wake word + noise + punctuation safely
-    """
-    text = text.lower().strip()
+def _process(text: str) -> str:
 
-    # remove wake word
-    text = text.replace(WAKE_WORD, "")
+    text = text.strip()
 
-    # remove punctuation (more robust than before)
-    text = re.sub(r"[^\w\s]", "", text)
+    if "time" in text:
+        return f"The time is {datetime.now().strftime('%H:%M')}."
 
-    return text.strip()
+    if "date" in text:
+        return f"Today is {datetime.now().strftime('%A %B %d')}."
 
+    if "joke" in text:
+        return "Why did the AI cross the road? To optimize the reward function."
 
-# -------------------------
-# SIMPLE CONFIDENCE SCORER
-# -------------------------
-def _confidence(text: str, keywords: list) -> float:
-    """
-    Lightweight scoring to prevent garbage triggers
-    """
-    score = 0.0
+    if "weather" in text:
+        return "Weather module not connected yet."
 
-    for kw in keywords:
-        if kw in text:
-            score += 0.6
+    if "bye" in text or "goodbye" in text:
+        return "Going idle."
 
-        # exact match bonus
-        if text == kw:
-            score += 0.3
-
-        # word-level match bonus
-        if kw in text.split():
-            score += 0.1
-
-    return min(score, 1.0)
+    return "I didn't understand that clearly."
 
 
-# -------------------------
-# MAIN ENTRY
-# -------------------------
 def handle(text: str) -> str:
 
     global active
@@ -58,76 +34,31 @@ def handle(text: str) -> str:
         return ""
 
     raw = text.lower().strip()
-    cleaned = _clean(raw)
 
     # -------------------------
-    # WAKE WORD GATE
+    # WAKE WORD MODE
     # -------------------------
-    if not active:
+    if WAKE_WORD in raw:
+        active = True
 
-        if WAKE_WORD in raw:
-            active = True
+        cleaned = raw.replace(WAKE_WORD, "").strip(",. ")
 
-            # only wake word
-            if cleaned == "":
-                return "Yes?"
-
+        if cleaned:
             return _process(cleaned)
 
-        return ""  # ignore everything else
+        return "Yes?"
 
     # -------------------------
-    # EXIT CONDITIONS
+    # IMPORTANT FIX: ALWAYS ALLOW COMMANDS
     # -------------------------
-    if any(x in cleaned for x in ["sleep", "stop listening", "goodbye"]):
-        active = False
-        return "Going idle."
-
-    # -------------------------
-    # EMPTY SAFETY
-    # -------------------------
-    if cleaned == "":
-        return ""
+    if active:
+        return _process(raw)
 
     # -------------------------
-    # NOISE FILTER (IMPORTANT FIX)
+    # PASSIVE MODE (CRITICAL FIX)
     # -------------------------
-    NOISE_BLOCK = ["darkness", "to this date", "the color is blue"]
+    # allow basic commands even without wake word
+    if any(x in raw for x in ["time", "date", "joke", "weather"]):
+        return _process(raw)
 
-    if any(x in cleaned for x in NOISE_BLOCK):
-        return "I didn't understand that clearly."
-
-    # -------------------------
-    # NORMAL FLOW
-    # -------------------------
-    return _process(cleaned)
-
-
-# -------------------------
-# EXECUTION ENGINE
-# -------------------------
-def _process(text: str) -> str:
-
-    text = text.strip()
-
-    # TIME
-    if _confidence(text, ["time", "clock", "what time"]) > 0.5:
-        return f"The time is {datetime.now().strftime('%H:%M')}."
-
-    # DATE
-    if _confidence(text, ["date", "today", "what day"]) > 0.5:
-        return f"Today is {datetime.now().strftime('%A %B %d')}."
-
-    # JOKE
-    if _confidence(text, ["joke", "funny", "laugh"]) > 0.5:
-        return "Why did the AI cross the road? To optimize the reward function."
-
-    # WEATHER
-    if _confidence(text, ["weather", "temperature", "forecast"]) > 0.5:
-        return "Weather module not connected yet."
-
-    # GOODBYE
-    if "goodbye" in text:
-        return "Goodbye! Have a great day!"
-
-    return "I didn't understand that clearly."
+    return ""

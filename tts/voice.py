@@ -1,38 +1,14 @@
-import time
-import sounddevice as sd
-
-from core.logger import L3
-from core.duplex_guard import duplex
-from tts.engine import synthesize_audio
-
-
-SAMPLE_RATE = 24000
-
+import pyttsx3
 
 def speak(text: str):
+    print("[TTS TEST] creating engine")
 
-    if not text:
-        return
+    engine = pyttsx3.init()   # NEW ENGINE EVERY TIME
+    engine.setProperty("rate", 180)
 
-    L3(f"TTS START: {text}")
+    print("[TTS TEST] speaking:", text)
 
-    # activate echo suppression window
-    duplex.start(hold_seconds=1.8)
+    engine.say(text)
+    engine.runAndWait()
 
-    try:
-        audio = synthesize_audio(text)
-
-        _play(audio)
-
-    finally:
-        duplex.stop()
-        L3("TTS END")
-
-
-def _play(audio):
-
-    # small buffer to prevent immediate re-capture
-    time.sleep(0.05)
-
-    sd.play(audio, samplerate=SAMPLE_RATE)
-    sd.wait()
+    print("[TTS TEST] done")

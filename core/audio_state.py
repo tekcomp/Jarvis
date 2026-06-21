@@ -1,21 +1,42 @@
 import time
 
 class AudioState:
+
     def __init__(self):
         self.is_speaking = False
-        self.speak_until = 0
-        self.ignore_until = 0
+        self.mute_until = 0
+        self.cooldown_until = 0
 
-    def start_speaking(self, duration=2.0):
+    # -------------------------
+    # TTS START
+    # -------------------------
+    def start_speaking(self, hold_seconds=1.5):
         self.is_speaking = True
-        self.speak_until = time.time() + duration
-        self.ignore_until = self.speak_until + 0.5  # buffer
+        self.mute_until = time.time() + hold_seconds
 
-    def stop_speaking(self):
+    # -------------------------
+    # TTS END
+    # -------------------------
+    def stop_speaking(self, cooldown=0.8):
         self.is_speaking = False
+        self.cooldown_until = time.time() + cooldown
 
-    def is_blocked(self):
-        return time.time() < self.ignore_until
+    # -------------------------
+    # MIC GATE CHECK
+    # -------------------------
+    def mic_allowed(self) -> bool:
+        now = time.time()
+
+        if self.is_speaking:
+            return False
+
+        if now < self.mute_until:
+            return False
+
+        if now < self.cooldown_until:
+            return False
+
+        return True
 
 
 audio_state = AudioState()
