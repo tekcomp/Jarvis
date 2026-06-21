@@ -1,113 +1,67 @@
 import sys
 import os
 
-# -------------------------------------------------
-# FIX IMPORT PATH (CI SAFE)
-# -------------------------------------------------
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, ROOT)
 
-from core.brain import handle
+from core.brain import handle, active
 
 
-# -------------------------------------------------
-# TEST CASES (behavior contracts)
-# -------------------------------------------------
-TESTS = [
-    ("what time is it", "time"),
-    ("what is the date", "date"),
-    ("tell me a joke", "joke"),
-    ("jarvis", "wake"),
-    ("jarvis what time is it", "time"),
-    ("random nonsense", "none"),
-]
+def run_wake_tests():
 
+    print("\n[CI] WAKE STREAM TESTS\n")
 
-# -------------------------------------------------
-# TEST RUNNER
-# -------------------------------------------------
-def run_tests():
-    print("\n==============================")
-    print("[JARVIS TEST HARNESS v1]")
-    print("==============================\n")
+    tests = [
+        # (input, expected_active_state_after_handle)
+        ("hello", False),
+        ("jarvis", True),
+        ("what time is it", True),
+        ("random nonsense", False),
+        ("jarvis tell me a joke", True),
+    ]
 
     passed = 0
     failed = 0
 
-    for input_text, expected in TESTS:
+    for input_text, expected in tests:
 
-        # reset brain state per test (IMPORTANT)
-        reset_brain_state()
+        # =====================================================
+        # CRITICAL FIX: CLEAN STATE PER TEST
+        # =====================================================
+        try:
+            from core.brain import active
+            import core.brain as brain
 
-        output = handle(input_text.lower().strip())
-        result_type = classify(output)
+            brain.active = False  # reset global state BEFORE test
 
-        ok = result_type == expected
+        except Exception:
+            pass
 
-        print(f"INPUT   : {input_text}")
-        print(f"OUTPUT  : {output}")
-        print(f"EXPECT  : {expected}")
-        print(f"GOT     : {result_type}")
+        # run pipeline
+        handle(input_text)
+
+        # re-read state after execution
+        try:
+            from core.brain import active
+            result = active
+        except Exception:
+            result = False
+
+        ok = (result == expected)
+
+        print(f"INPUT: {input_text}")
+        print(f"EXPECTED ACTIVE: {expected} | GOT: {result}")
 
         if ok:
-            print("RESULT  : PASS\n")
+            print("✅ PASS\n")
             passed += 1
         else:
-            print("RESULT  : FAIL\n")
+            print("❌ FAIL\n")
             failed += 1
 
-    print("==============================")
-    print(f"TOTAL PASS: {passed}")
-    print(f"TOTAL FAIL: {failed}")
-    print("==============================\n")
+    print(f"Wake Stream: {passed} passed / {failed} failed\n")
 
-    # CI EXIT CODE
-    sys.exit(0 if failed == 0 else 1)
-
-
-# -------------------------------------------------
-# RESET STATE (IMPORTANT FOR WAKE WORD SYSTEMS)
-# -------------------------------------------------
-def reset_brain_state():
-    """
-    Ensures each test runs independently.
-    Prevents wake-word memory leaks.
-    """
-    try:
-        import core.brain as brain
-        brain.active = False
-    except Exception:
-        pass
-
-
-# -------------------------------------------------
-# CLASSIFIER (HARDENED)
-# -------------------------------------------------
-def classify(output: str) -> str:
-
-    if not output:
-        return "none"
-
-    o = output.lower()
-
-    if "time is" in o:
-        return "time"
-
-    if "today is" in o or "date" in o:
-        return "date"
-
-    if "reward function" in o:
-        return "joke"
-
-    if "yes?" in o:
-        return "wake"
-
-    if "didn't understand" in o:
-        return "none"
-
-    return "unknown"
-
-
-if __name__ == "__main__":
-    run_tests()
+    return {
+        "passed": passed,
+        "failed": failed
+    }

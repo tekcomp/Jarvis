@@ -1,130 +1,102 @@
 from datetime import datetime
-from collections import deque
 from core.memory import add
 
-# =========================================================
-# CONFIG
-# =========================================================
 WAKE_WORD = "jarvis"
 
 active = False
 
-# lightweight context window (last N turns)
-context_window = deque(maxlen=6)
+
+# =========================================================
+# RESET (USED BY CI ONLY)
+# =========================================================
+def reset():
+    global active
+    active = False
 
 
 # =========================================================
-# MEMORY HELPERS
-# =========================================================
-def _remember(role: str, text: str):
-    """
-    Stores structured conversation context
-    """
-    entry = f"{role}: {text}"
-    context_window.append(entry)
-    add(role, text)
-
-
-def _get_context() -> str:
-    """
-    Returns short rolling context (future LLM-ready)
-    """
-    return "\n".join(context_window)
-
-
-# =========================================================
-# INTENT ENGINE
+# CORE PROCESSOR
 # =========================================================
 def _process(text: str) -> str:
 
-    text = text.strip().lower()
+    text = text.strip()
 
-    _remember("user", text)
+    add("user", text)
 
-    response = None
-
-    # -------------------------
-    # TIME
-    # -------------------------
     if "time" in text:
         response = f"The time is {datetime.now().strftime('%H:%M')}."
 
-    # -------------------------
-    # DATE
-    # -------------------------
     elif "date" in text:
         response = f"Today is {datetime.now().strftime('%A %B %d')}."
 
-    # -------------------------
-    # JOKE
-    # -------------------------
     elif "joke" in text:
         response = "Why did the AI cross the road? To optimize the reward function."
 
-    # -------------------------
-    # WEATHER (stub)
-    # -------------------------
     elif "weather" in text:
         response = "Weather module not connected yet."
 
-    # -------------------------
-    # EXIT
-    # -------------------------
     elif any(x in text for x in ["bye", "goodbye", "stop listening"]):
         response = "Going idle."
 
-        global active
-        active = False
-
-    # -------------------------
-    # UNKNOWN
-    # -------------------------
     else:
         response = "I didn't understand that clearly."
 
-    _remember("assistant", response)
-
+    add("assistant", response)
     return response
 
 
 # =========================================================
-# ENTRY POINT (Cognitive Router)
+# ENTRY POINT
 # =========================================================
-def handle(text: str) -> str:
-
+def handle(text: str, reset_mode: bool = False) -> str:
     global active
+
+    if reset_mode:
+        active = False
 
     if not text:
         return ""
 
     raw = text.lower().strip()
 
-    # =====================================================
-    # WAKE WORD DETECTION
-    # =====================================================
+    # -------------------------
+    # WAKE WORD
+    # -------------------------
     if WAKE_WORD in raw:
-
         active = True
 
         cleaned = raw.replace(WAKE_WORD, "").strip(",. ")
 
         if not cleaned:
-            response = "Yes?"
-            _remember("assistant", response)
-            return response
+            return "Yes?"
 
         return _process(cleaned)
 
-    # =====================================================
-    # ACTIVE MODE (FULL CONVERSATION)
-    # =====================================================
+    # -------------------------
+    # ACTIVE MODE
+    # -------------------------
     if active:
-        return _process(raw)
+        response = _process(raw)
 
-    # =====================================================
-    # PASSIVE MODE (LIGHT ROUTING ONLY)
-    # =====================================================
+        # CRITICAL FIX:
+        # auto-exit on goodbye
+        if "going idle" in response.lower():
+            active = False
+
+        return response
+
+    # -------------------------
+    # PASSIVE MODE
+    # -------------------------
     if any(x in raw for x in ["time", "date", "joke", "weather"]):
         return _process(raw)
 
     return ""
+
+def reset():
+    """
+    CI / test isolation hook
+    Resets conversational state
+    """
+    global active
+    active = False
