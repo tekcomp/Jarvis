@@ -3,7 +3,6 @@
 # ==============================
 
 import asyncio
-from pydoc import text
 import queue
 import threading
 import time
@@ -23,20 +22,26 @@ from core.personality_engine_v2 import PersonalityEngineV2
 from core.response_guard import ResponseGuard
 
 
+# =========================================================
+# COMPONENTS
+# =========================================================
 response_guard = ResponseGuard()
-
 personality = PersonalityEngineV2()
-
-# =========================================================
-# GLOBAL FSM
-# =========================================================
 fsm = InterruptFSM()
 
 # =========================================================
-# EVENT BUS
+# QUEUES
 # =========================================================
 audio_queue = queue.Queue()
 tts_queue = queue.Queue()
+
+# =========================================================
+# GLOBAL STATE LOCKS
+# =========================================================
+UTTERANCE_LOCK = False
+LAST_UTTERANCE = None
+LAST_UTTERANCE_TS = 0
+DUPLICATE_WINDOW_SEC = 2.5
 
 
 # =========================================================
@@ -52,7 +57,23 @@ def has_audio(audio):
 
 
 # =========================================================
-# TTS STATE CONTROL (SINGLE SOURCE OF TRUTH)
+# DUPLICATE DETECTION (FIXED SINGLE VERSION)
+# =========================================================
+def is_duplicate_utterance(text: str) -> bool:
+    global LAST_UTTERANCE, LAST_UTTERANCE_TS
+
+    now = time.time()
+
+    if text == LAST_UTTERANCE and (now - LAST_UTTERANCE_TS) < DUPLICATE_WINDOW_SEC:
+        return True
+
+    LAST_UTTERANCE = text
+    LAST_UTTERANCE_TS = now
+    return False
+
+
+# =========================================================
+# TTS CONTROL
 # =========================================================
 def enter_tts():
     system_busy.set()
@@ -65,7 +86,15 @@ def exit_tts():
 
 
 # =========================================================
-# TTS WORKER (NO DUPLICATES / NO RECURSION)
+# UTTERANCE UNLOCK
+# =========================================================
+def unlock_utterance():
+    global UTTERANCE_LOCK
+    UTTERANCE_LOCK = False
+
+
+# =========================================================
+# TTS WORKER
 # =========================================================
 def tts_worker():
 
@@ -73,6 +102,10 @@ def tts_worker():
 
     try:
         while not is_shutdown():
+
+            if system_busy.is_set():
+                time.sleep(0.05)
+                continue
 
             try:
                 text = tts_queue.get(timeout=0.5)
@@ -124,11 +157,10 @@ async def cognitive_loop():
 
         audio = packet.get("audio")
 
-        # FIX: numpy-safe audio check
         if not has_audio(audio):
             continue
 
-        # CRITICAL FIX: ONLY USE audio_state GATE (NO custom echo system)
+        # HARD GATE (single authority)
         if not audio_state.mic_allowed():
             print("[CI-ECHO] BLOCKED BY AUDIO STATE")
             continue
@@ -139,34 +171,57 @@ async def cognitive_loop():
 
         text = transcribe(audio)
 
-        if response_guard.should_block(text):
+        if not text or len(text.strip()) < 2:
+            continue
+
+        text = text.strip().lower()
+
+        # duplicate filter
+        if is_duplicate_utterance(text):
             print("[CI-GUARD] BLOCKED DUPLICATE INTENT")
             continue
 
-        personality.update(text)
-
-        if not text or len(text.strip()) < 2:
+        # utterance lock
+        global UTTERANCE_LOCK
+        if UTTERANCE_LOCK:
             continue
+
+        UTTERANCE_LOCK = True
+
+        # guard layer
+        if response_guard.should_block(text):
+            UTTERANCE_LOCK = False
+            continue
+
+        personality.update(text)
 
         print(f"[CI-FSM] frame={frame_id} HEARD text={text}")
 
         final_text = ""
 
-        for chunk in stream_response(
-            text,
-            system_prompt=personality.system_prompt()
-        ):
+        try:
+            for chunk in stream_response(
+                text,
+                system_prompt=personality.system_prompt()
+            ):
 
-            if is_interrupted():
-                final_text = ""
-                break
+                if is_interrupted():
+                    final_text = ""
+                    break
 
-            final_text += chunk
+                final_text += chunk
+
+        finally:
+            UTTERANCE_LOCK = False
 
         if final_text and not is_interrupted():
             print(f"[CI-TTS] QUEUE_PUSH: {final_text}")
             response_guard.update(text, final_text)
+
             tts_queue.put(final_text)
+
+            # safety unlock fallback
+            asyncio.get_event_loop().call_later(2.0, unlock_utterance)
 
 
 # =========================================================
@@ -187,7 +242,6 @@ def vad_loop():
             if not has_audio(audio):
                 continue
 
-            # CRITICAL FIX: mic gating happens INSIDE VAD layer already
             if not audio_state.mic_allowed():
                 continue
 
