@@ -29,19 +29,54 @@ class SpecContractV2:
 
         t = text.lower().strip()
 
+        # -------------------------
+        # WAKE WORD (HIGHEST PRIORITY)
+        # -------------------------
         if t == "jarvis":
             return ContractResult(Intent.WAKE, t, text)
 
-        if "what time" in t:
+        # -------------------------
+        # SHUTDOWN (STRICT MATCH ONLY)
+        # -------------------------
+        if t in ["bye", "exit", "quit", "shutdown"]:
+            return ContractResult(Intent.SHUTDOWN, t, text)
+
+        # -------------------------
+        # TIME (STRICT + EXPANDED)
+        # -------------------------
+        time_keywords = [
+            "what time",
+            "current time",
+            "tell me the time",
+            "time is it",
+            "what's the time"
+        ]
+
+        if any(k in t for k in time_keywords):
             return ContractResult(Intent.TIME, t, text)
 
-        if "date" in t or "today" in t:
+        # -------------------------
+        # DATE (FIXED LOGIC)
+        # -------------------------
+        date_keywords = [
+            "what is the date",
+            "today's date",
+            "current date",
+            "what date",
+            "date today"
+        ]
+
+        if any(k in t for k in date_keywords):
             return ContractResult(Intent.DATE, t, text)
 
+        # fallback ONLY if explicit "date" and NOT time query
+        if "date" in t and "time" not in t:
+            return ContractResult(Intent.DATE, t, text)
+
+        # -------------------------
+        # JOKE
+        # -------------------------
         if "joke" in t:
             return ContractResult(Intent.JOKE, t, text)
-
-        if t in ["bye", "exit", "quit"]:
-            return ContractResult(Intent.SHUTDOWN, t, text)
 
         return ContractResult(Intent.NOISE, "", text)

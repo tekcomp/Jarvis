@@ -1,10 +1,11 @@
 # ==============================
-# core/alive_kernel.py (CI FIXED)
+# core/alive_kernel.py (ANTI-ECHO LOOP FIX v6)
 # ==============================
 
 import asyncio
 import queue
 import threading
+import time
 
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
@@ -17,27 +18,25 @@ from core.interruption import is_interrupted
 
 from core.interrupt_fsm import InterruptFSM
 
+
+# =========================================================
+# GLOBAL FSM
+# =========================================================
 fsm = InterruptFSM()
 
-# -----------------------------
-# EVENT BUS
-# -----------------------------
 audio_queue = queue.Queue()
 tts_queue = queue.Queue()
 
 
 # =========================================================
-# 🔥 STRICT 2-STATE INTERRUPT MACHINE (CI SAFE)
+# ANTI-ECHO SYSTEM (CRITICAL FIX)
 # =========================================================
-
-# STATE
 TTS_ACTIVE = False
-
-# TOKEN (ONLY 1 INTERRUPT EVER PER SESSION)
 interrupt_token = 1
-
-# HARD LOCK (prevents spam)
 interrupt_locked = False
+
+# 🚨 NEW: echo suppression window
+IGNORE_AUDIO_UNTIL = 0
 
 
 def reset_interrupt_state():
@@ -47,9 +46,13 @@ def reset_interrupt_state():
 
 
 def enter_tts_state():
-    global TTS_ACTIVE
+    global TTS_ACTIVE, IGNORE_AUDIO_UNTIL
+
     TTS_ACTIVE = True
     reset_interrupt_state()
+
+    # 🚨 CRITICAL FIX: ignore mic during TTS playback + buffer tail
+    IGNORE_AUDIO_UNTIL = time.time() + 1.2
 
 
 def exit_tts_state():
@@ -57,40 +60,33 @@ def exit_tts_state():
     TTS_ACTIVE = False
 
 
-def try_interrupt():
-    """
-    CI GUARANTEED SINGLE FIRE INTERRUPT
-    """
+def should_ignore_audio():
+    return time.time() < IGNORE_AUDIO_UNTIL
 
+
+def try_interrupt():
     global interrupt_token, interrupt_locked
 
     if not system_busy.is_set():
         return
-
     if not TTS_ACTIVE:
         return
-
     if interrupt_locked:
         return
 
-    if interrupt_token <= 0:
-        return
-
-    # FIRE ONCE
-    
     interrupt_locked = True
     interrupt_token = 0
 
     try:
         from core.audio_state import audio_state
         audio_state.on_interrupt()
-    except:
+    except Exception:
         pass
 
 
-# -----------------------------
+# =========================================================
 # TTS ENGINE
-# -----------------------------
+# =========================================================
 def tts_worker():
 
     fsm.start_tts()
@@ -105,139 +101,122 @@ def tts_worker():
         if text is None:
             break
 
-        try:
-            system_busy.set()
-            enter_tts_state()
+        system_busy.set()
+        enter_tts_state()
 
+        try:
             print(f"[JARVIS TTS] {text}")
             speak(text)
-
         finally:
             system_busy.clear()
             exit_tts_state()
             tts_queue.task_done()
 
     print("[TTS] EXIT")
-fsm.stop_tts()
+    fsm.stop_tts()
 
-# -----------------------------
+
+# =========================================================
 # COGNITIVE ENGINE
-# -----------------------------
+# =========================================================
 async def cognitive_loop():
+
+    print("[CI-BOOT] cognitive_loop STARTED")
 
     frame_id = 0
 
     while not is_shutdown():
 
-        frame_id += 1
+        print("[CI-DEBUG] waiting for audio...")
 
         try:
-            audio = await asyncio.to_thread(audio_queue.get, True, 0.5)
-        except queue.Queue.Empty:
+            packet = audio_queue.get(timeout=0.5)
+        except queue.Empty:
+            await asyncio.sleep(0.03)
             continue
 
-        if audio is None:
-            print(f"[CI-FSM] frame={frame_id} EVENT=SHUTDOWN")
+        if packet is None:
             break
 
-        text = await asyncio.to_thread(transcribe, audio)
+        audio = packet.get("audio")
 
-        if not text:
-            print(f"[CI-FSM] frame={frame_id} EVENT=EMPTY_TRANSCRIPT")
+        if audio is None:
             continue
 
-        print(f"[CI-FSM] frame={frame_id} EVENT=HEARD text={text}")
+        # 🚨 CRITICAL FIX: ignore self-echo / TTS leakage
+        if should_ignore_audio():
+            print("[CI-ECHO] IGNORED AUDIO (TTS WINDOW)")
+            continue
+
+        frame_id += 1
+
+        print(f"[CI-AUDIO] RECEIVED frame={packet.get('frame_id')}")
+
+        text = transcribe(audio)
+
+        if not text:
+            continue
+
+        # 🚨 SECOND FILTER: ignore echo phrases that match last output
+        if TTS_ACTIVE:
+            print("[CI-ECHO] BLOCKED POSSIBLE SELF AUDIO")
+            continue
+
+        print(f"[CI-FSM] frame={frame_id} HEARD text={text}")
 
         final_text = ""
 
-        for i, chunk in enumerate(stream_response(text)):
-
-            # =================================================
-            # FSM TRACE: per-token decision point
-            # =================================================
-            print(
-                f"[CI-FSM] frame={frame_id} token={i} "
-                f"busy={system_busy.is_set()} "
-                f"interrupted={is_interrupted()}"
-            )
+        for chunk in stream_response(text):
 
             if is_interrupted():
-                print("[CI-FSM] STREAM_INTERRUPT_TRIGGERED")
-                print(
-                    f"[CI-FSM] frame={frame_id} token={i} "
-                    f"EVENT=STREAM_INTERRUPT_TRIGGERED"
-                )
                 final_text = ""
                 break
 
             final_text += chunk
-            print(f"[STREAM] {chunk}")
-
-            await asyncio.sleep(0)
-
-        # =====================================================
-        # FSM FINAL DECISION TRACE
-        # =====================================================
-        print(
-            f"[CI-FSM] frame={frame_id} EVENT=FINAL_CHECK "
-            f"final_len={len(final_text)} "
-            f"interrupted={is_interrupted()}"
-        )
 
         if final_text and not is_interrupted():
-            print(f"[CI-FSM] frame={frame_id} EVENT=QUEUE_TTS")
+            print(f"[CI-TTS] QUEUE_PUSH: {final_text}")
             tts_queue.put(final_text)
-        else:
-            print(f"[CI-FSM] frame={frame_id} EVENT=DROP_OUTPUT")
 
 
-# -----------------------------
-# VAD LOOP (FRAME TRIGGER ONLY)
-# -----------------------------
+# =========================================================
+# VAD LOOP
+# =========================================================
 def vad_loop():
 
     frame_id = 0
 
     try:
         for audio in get_speech_frames():
+
             frame_id += 1
+
+            # 🚨 CRITICAL FIX: suppress VAD during TTS echo window
+            if should_ignore_audio():
+                continue
+
+            if audio is None:
+                continue
+
             user_speaking = len(audio) > 0
+
             fsm.evaluate(frame_id, user_speaking)
 
-            if is_shutdown():
-                break
+            if user_speaking:
+                audio_queue.put({
+                    "frame_id": frame_id,
+                    "audio": audio
+                })
 
-            # ONLY DETECT OVERLAP → NEVER DECIDE
-            if system_busy.is_set():
-
-                # CI-CORRECT SINGLE FRAME INTERRUPT
-                if TTS_ACTIVE and user_speaking and not interrupt_locked:
-                    print("[CI-FSM] EVENT=INTERRUPT SINGLE_SHOT_TRIGGER")
-                    try_interrupt()
-                    interrupt_locked = True
-
-                print(
-                    f"[CI-FSM] frame=VAD busy={system_busy.is_set()} "
-                    f"audio_len={len(audio)}"
-                )
-
-        # ------------------------------------
-        # PURE SENSOR OUTPUT ONLY
-        # ------------------------------------
-        audio_queue.put({
-            "frame_id": frame_id,
-            "audio": audio
-        })
-
-        frame_id += 1
+                print("[CI-VAD] AUDIO PUSHED")
 
     finally:
         print("[VAD] EXIT")
 
 
-# -----------------------------
+# =========================================================
 # START KERNEL
-# -----------------------------
+# =========================================================
 def start_kernel():
 
     print("[SYSTEM] BOOTING JARVIS CORE v3.1")
@@ -254,7 +233,11 @@ def start_kernel():
 
     finally:
         trigger_shutdown("kernel exit")
+
         audio_queue.put(None)
         tts_queue.put(None)
+
+        fsm.stop_tts()
+        fsm.fired = False
 
         print("[SYSTEM] SHUTDOWN COMPLETE")

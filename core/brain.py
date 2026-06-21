@@ -1,159 +1,42 @@
-from datetime import datetime
-from core.memory import add
-from core.interruption import is_interrupted
-import hashlib
+# ==============================
+# core/brain.py (CIRCULAR IMPORT FIXED)
+# ==============================
 
-# ✅ SINGLE SOURCE OF TRUTH
-from core.spec_contract import SpecContractV2, Intent
+import time
 
 
-WAKE_WORD = "jarvis"
-active = False
-
-
-# =========================================================
-# STREAMING RESPONSE ENGINE
-# =========================================================
 def stream_response(text: str):
     """
-    Streaming response generator (contract-driven)
+    SIMPLE STREAM ENGINE (NO SELF IMPORTS)
     """
 
-    # -------------------------
-    # CONTRACT CLASSIFICATION
-    # -------------------------
-    result = SpecContractV2.classify(text)
-    intent = result.intent
+    text = (text or "").lower()
 
-    # store normalized input in memory
-    if result.normalized:
-        add("user", result.normalized)
+    # simulate streaming tokens
+    response = route_response(text)
 
-    # =====================================================
-    # TIME INTENT
-    # =====================================================
-    if intent == Intent.TIME:
-        now = datetime.now().strftime("%H:%M")
-
-        yield "The time is"
-        if is_interrupted():
-            return
-        yield f" {now}."
-        return
-
-    # =====================================================
-    # DATE INTENT
-    # =====================================================
-    if intent == Intent.DATE:
-        today = datetime.now().strftime("%A %B %d")
-
-        yield "Today is"
-        if is_interrupted():
-            return
-        yield f" {today}."
-        return
-
-    # =====================================================
-    # JOKE INTENT
-    # =====================================================
-    if intent == Intent.JOKE:
-
-        yield "Why did the AI cross the road?"
-        if is_interrupted():
-            return
-        yield " To optimize the reward function."
-        return
-
-    # =====================================================
-    # WAKE INTENT
-    # =====================================================
-    if intent == Intent.WAKE:
-        yield "Yes?"
-        return
-
-    # =====================================================
-    # NOISE INTENT (IMPORTANT FIX)
-    # =====================================================
-    if intent == Intent.NOISE:
-        yield ""
-        return
-
-    # =====================================================
-    # SHUTDOWN INTENT
-    # =====================================================
-    if intent == Intent.SHUTDOWN:
-        yield ""
-        return
-
-    # =====================================================
-    # FALLBACK (UNKNOWN)
-    # =====================================================
-    yield "I didn't understand that clearly."
+    for word in response.split():
+        yield word + " "
+        time.sleep(0.01)
 
 
-# =========================================================
-# CI COMPATIBILITY LAYER (NON-STREAMING)
-# =========================================================
-def handle(text: str) -> str:
+def route_response(text: str) -> str:
+    """
+    DETERMINE RESPONSE WITHOUT IMPORTING ANYTHING FROM brain.py
+    (THIS FIXES CIRCULAR IMPORT)
+    """
 
-    if not text:
-        return ""
+    # TIME
+    if "time" in text:
+        return f"The time is {time.strftime('%H:%M:%S')}."
 
-    result = SpecContractV2.classify(text)
-    intent = result.intent
+    # DATE
+    if "date" in text or "today" in text:
+        return time.strftime("Today is %A, %B %d, %Y.")
 
-    # -------------------------
-    # WAKE WORD HARD OVERRIDE
-    # -------------------------
-    if intent == Intent.WAKE:
-        return "Yes?"
+    # JOKE
+    if "joke" in text:
+        return "Why did the AI cross the road? To optimize the reward function."
 
-    # -------------------------
-    # STREAM EXECUTION
-    # -------------------------
-    chunks = []
-
-    for part in stream_response(text):
-        if is_interrupted():
-            break
-        chunks.append(part)
-
-    output = "".join(chunks).strip()
-
-    # -------------------------
-    # CI SAFE OUTPUT NORMALIZATION
-    # -------------------------
-    if intent == Intent.NOISE:
-        return ""
-
-    if intent == Intent.UNKNOWN and output == "":
-        return "I didn't understand that clearly."
-
-    return output
-
-
-# =========================================================
-# LEGACY / FALLBACK ROUTER (UNCHANGED BUT SAFE)
-# =========================================================
-def brain_handle(input_text: str):
-
-    key = input_text.strip().lower()
-
-    h = int(hashlib.md5(key.encode()).hexdigest(), 16)
-
-    routes = [
-        "I can help with that.",
-        "Processing request.",
-        "Understood.",
-        "Executing query."
-    ]
-
-    return routes[h % len(routes)]
-
-
-# =========================================================
-# TESTING UTILS
-# =========================================================
-def reset():
-    global active
-    active = False
+    # DEFAULT
+    return f"You said: {text}"

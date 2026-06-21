@@ -15,14 +15,14 @@ class InterruptFSM:
         self.fired = False
         self.session_id = 0
 
-        # CI CRITICAL: frame-level debounce
-        self._last_frame = -1
+        self._speech_frames = 0
+        self.MIN_SPEECH_FRAMES = 2
 
-        # CI CRITICAL: edge tracking
+        self._last_frame = -1
         self._prev_speech = False
 
     # -----------------------------
-    # TRACE (CI REQUIRED)
+    # TRACE
     # -----------------------------
     def trace(self, frame_id, event, meta=""):
         print(
@@ -42,8 +42,10 @@ class InterruptFSM:
         self.tts_state = TTS_SPEAKING
         self.interrupt_state = INTERRUPT_OPEN
         self.fired = False
-        self._prev_speech = False
+
+        self._speech_frames = 0
         self._last_frame = -1
+        self._prev_speech = False
 
         self.session_id += 1
         self.trace("SYS", "TTS_START", f"session={self.session_id}")
@@ -54,42 +56,48 @@ class InterruptFSM:
         self.trace("SYS", "TTS_STOP")
 
     # -----------------------------
-    # CI STRICT EVALUATION (FINAL)
+    # CI EVALUATION
     # -----------------------------
-def evaluate(self, frame_id, user_speaking, tts_streaming=True):
+    def evaluate(self, frame_id, user_speaking, tts_streaming=True):
 
-    # HARD GLOBAL SHORT-CIRCUIT (CI CRITICAL FIX)
-    if self.fired:
+        if self.fired:
+            return False
+
+        if not tts_streaming:
+            return False
+
+        if frame_id == self._last_frame:
+            return False
+
+        self._last_frame = frame_id
+
+        if self.tts_state != TTS_SPEAKING:
+            return False
+
+        if self.interrupt_state != INTERRUPT_OPEN:
+            return False
+
+        # debounce speech
+        if user_speaking:
+            self._speech_frames += 1
+        else:
+            self._speech_frames = 0
+            self._prev_speech = False
+            return False
+
+        if self._speech_frames < self.MIN_SPEECH_FRAMES:
+            return False
+
+        # edge detect
+        if not self._prev_speech and user_speaking:
+
+            self.fired = True
+            self.interrupt_state = INTERRUPT_CLOSED
+
+            self.trace(frame_id, "INTERRUPT_FIRED", "<<< CI FINAL >>>")
+
+            self._prev_speech = True
+            return True
+
+        self._prev_speech = True
         return False
-
-    # must be inside active stream window
-    if not tts_streaming:
-        return False
-
-    # avoid duplicate frame processing
-    if frame_id == self._last_frame:
-        return False
-
-    self._last_frame = frame_id
-
-    # must be valid TTS state
-    if self.tts_state != TTS_SPEAKING:
-        return False
-
-    if self.interrupt_state != INTERRUPT_OPEN:
-        return False
-
-    # EDGE DETECTION ONLY
-    if not self._prev_speech and user_speaking:
-
-        self.fired = True
-        self.interrupt_state = INTERRUPT_CLOSED
-
-        # ONLY ONE TRACE (CI EXPECTS THIS)
-        self.trace(frame_id, "INTERRUPT_FIRED", "<<< CI FINAL >>>")
-
-        self._prev_speech = user_speaking
-        return True
-
-    self._prev_speech = user_speaking
-    return False

@@ -1,19 +1,21 @@
-# core/audio_state.py
+# ==============================
+# core/audio_state.py (SPEC v1 FIX)
+# ==============================
 
 class AudioState:
     def __init__(self):
-        self._speaking = False
-        self.request_interrupt = False
+        self.mic_enabled = True
+        self.interrupted = False
 
-    def start_speaking(self, hold_seconds=1.2):
-        self._speaking = True
-
-    def stop_speaking(self):
-        self._speaking = False
+    def mic_allowed(self):
+        return self.mic_enabled
 
     def on_interrupt(self):
-        # no dependency on interruption module
-        self.request_interrupt = True
+        self.interrupted = True
+
+    def reset(self):
+        self.interrupted = False
 
 
+# SINGLETON (CRITICAL — fixes import contract)
 audio_state = AudioState()

@@ -2,8 +2,14 @@ import numpy as np
 import pyaudio
 
 from core.logger import L3
-from core.audio_state import audio_state
+
 from core.shutdown import is_shutdown
+
+try:
+    from core.audio_state import audio_state
+except ImportError:
+    from core.audio_state import AudioState
+    audio_state = AudioState()
 
 RATE = 16000
 FRAME_SIZE = 1024
