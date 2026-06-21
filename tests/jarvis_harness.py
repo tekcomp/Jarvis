@@ -4,7 +4,7 @@ import os
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, ROOT)
 
-from core.brain import handle, active
+from core.contract import handle, active
 
 
 def run_wake_tests():

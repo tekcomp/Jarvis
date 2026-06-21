@@ -1,7 +1,7 @@
 from datetime import datetime
 import numpy as np
 
-from core.brain import handle
+from core.contract import handle
 from core.audio_state import audio_state
 from tts.voice import speak
 

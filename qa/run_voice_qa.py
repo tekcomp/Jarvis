@@ -1,5 +1,5 @@
 import time
-from core.brain import handle
+from core.contract import handle
 
 TEST_CASES = [
     "hey jarvis",
@@ -20,7 +20,7 @@ def run_test(input_text: str):
     start = time.time()
 
     try:
-        output = handle(input_text, qa_mode=True)
+        output = handle(input_text)
     except Exception as e:
         output = f"error: {e}"
 

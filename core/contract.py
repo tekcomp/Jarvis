@@ -6,6 +6,10 @@ from core.brain import generate_response, stream_response, reset as brain_reset
 
 
 # =========================================================
+# PUBLIC API (ONLY THING TESTS SEE)
+# =========================================================
+
+# =========================================================
 # CI SAFE ENTRYPOINT (SYNC)
 # =========================================================
 def handle(text: str) -> str:
