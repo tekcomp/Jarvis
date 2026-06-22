@@ -191,7 +191,7 @@ async def cognitive_loop():
                 final_text = "Understood. Jarvis mode active."
 
             else:
-                final_text = "I understand. How can I help you?"
+                final_text = "How can I help you?"
 
         print(f"[CI-TTS] {final_text}")
 

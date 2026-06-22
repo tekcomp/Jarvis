@@ -1,5 +1,5 @@
 from core.personality_engine_v2 import get_engine
-from core.brain import route_intent
+from core.brain import route_intent, stream_response
 
 engine = get_engine()
 
@@ -16,12 +16,11 @@ def handle(text: str):
     if response:
         return response
 
-    # ONLY SAFE FALLBACK
     if engine.mode == "playful":
         return "Haha 😄 I'm having fun!"
 
     if engine.mode == "assistant":
-        return "I understand. How can I help you?"
+        return "How can I help you?"
 
     return "Understood."
 
