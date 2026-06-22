@@ -8,23 +8,23 @@ personality = PersonalityEngineV2()
 
 
 # =========================================================
-# MODE SWITCHING (REAL EXECUTION)
+# MODE ENGINE (CLEAN + RELIABLE)
 # =========================================================
 def apply_mode(text: str):
 
     t = text.lower()
 
-    if "playful mode" in t:
+    if "playful" in t and "mode" in t:
         personality.state.mode = "playful"
         return "Switched to playful mode."
 
-    if "jarvis mode" in t:
+    if "jarvis" in t and "mode" in t:
         personality.state.mode = "jarvis"
-        return "Switched to jarvis mode."
+        return "Jarvis mode active."
 
-    if "assistant mode" in t:
+    if "assistant" in t and "mode" in t:
         personality.state.mode = "assistant"
-        return "Switched to assistant mode."
+        return "Assistant mode active."
 
     return None
 
@@ -36,62 +36,81 @@ def route_intent(text: str):
 
     t = text.lower()
 
-    # =========================
-    # MODE SWITCHING (FIRST)
-    # =========================
+    # MODE FIRST
     mode_response = apply_mode(text)
     if mode_response:
         return mode_response
 
-    # =========================
-    # NORMAL INTENTS
-    # =========================
+    # TIME
     if "time" in t:
         return f"The current time is {time.strftime('%H:%M:%S')}."
 
+    # DATE
     if "date" in t or "today" in t:
         return "Today is Sunday, June 21, 2026."
 
+    # JOKE
     if "joke" in t:
-        if personality.state.mode == "playful":
-            return "Haha 😄 Why did the AI become playful? It learned humor gradients!"
-        return "Why did the AI cross the road? To optimize the reward function."
+        return "__JOKE__"
 
     return None
 
 
 # =========================================================
-# CI COMPATIBILITY
+# PERSONALITY FUSION ENGINE (🔥 NEW CORE)
+# =========================================================
+def personality_fusion(raw_response: str):
+
+    mode = personality.state.mode
+    mood = personality.state.mood
+
+    # -------------------------
+    # JOKE PERSONALITY OVERRIDE
+    # -------------------------
+    if raw_response == "__JOKE__":
+
+        if mode == "playful":
+            return "Haha 😄 Why did the AI become self-aware? It optimized humor gradients!"
+
+        if mode == "jarvis":
+            return "Humor module engaged. Why did the AI cross the road? To optimize the reward function."
+
+        return "Why did the AI cross the road? To optimize the reward function."
+
+    # -------------------------
+    # MODE STYLING WRAPPER
+    # -------------------------
+    if mode == "playful":
+        return f"😄 {raw_response}"
+
+    if mode == "jarvis":
+        return f"Understood. {raw_response}"
+
+    return raw_response
+
+
+# =========================================================
+# PUBLIC API
 # =========================================================
 def generate_response(text, system_prompt=None, context=None):
     return route_intent(text)
 
 
 # =========================================================
-# STREAM LAYER (FIXED BEHAVIOR)
+# STREAM ENGINE (FIXED BEHAVIOR)
 # =========================================================
 def stream_response(text, system_prompt=None, context=None):
 
-    # UPDATE PERSONALITY FIRST (IMPORTANT)
     personality.update(text)
 
-    response = route_intent(text)
+    raw = route_intent(text)
 
-    # MODE-AWARE FALLBACK (CRITICAL FIX)
-    if not response:
+    if not raw:
+        raw = "I am online and ready."
 
-        mode = personality.state.mode
+    final = personality_fusion(raw)
 
-        if mode == "playful":
-            response = "Haha 😄 I'm in playful mode!"
-
-        elif mode == "jarvis":
-            response = "Understood. Jarvis mode active."
-
-        else:
-            response = "I am online and ready."
-
-    for word in response.split():
+    for word in final.split():
         yield word + " "
 
 
