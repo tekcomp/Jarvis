@@ -1,135 +1,215 @@
+# core/personality_engine_v2.py
+
+
+# ==========================================
+# core/personality_engine_v2.py
+# Personality Engine v2
+# Production Ready
+# ==========================================
+
+from dataclasses import dataclass
 import time
-from dataclasses import dataclass, field
 
 
-# =========================================================
-# STATE MODEL
-# =========================================================
 @dataclass
 class PersonalityState:
-
-    mood: str = "neutral"          # neutral | focused | playful
-    verbosity: float = 0.5         # 0.0 short → 1.0 verbose
-
-    last_intent: str = ""
-    last_user_text: str = ""
-
-    last_interaction_ts: float = field(default_factory=time.time)
-
-    interrupted: bool = False
-
-    def age(self):
-        return time.time() - self.last_interaction_ts
+    mode: str = "jarvis"
+    mood: str = "neutral"
+    last_update: float = 0.0
 
 
-# =========================================================
-# INTENT CLASSIFIER (LIGHTWEIGHT, NO ML DEPENDENCY)
-# =========================================================
-def classify(text: str) -> dict:
-
-    t = text.lower()
-
-    intent = "unknown"
-    mood = "neutral"
-
-    # INTENTS
-    if "time" in t:
-        intent = "query_time"
-    elif "date" in t:
-        intent = "query_date"
-    elif "joke" in t:
-        intent = "joke"
-    elif "stop" in t:
-        intent = "interrupt"
-
-    # MOOD SIGNALS
-    if "?" in t:
-        mood = "curious"
-    if "joke" in t:
-        mood = "playful"
-    if "now" in t:
-        mood = "focused"
-
-    return {
-        "intent": intent,
-        "mood": mood
-    }
-
-
-# =========================================================
-# PERSONALITY ENGINE v2 (CORE)
-# =========================================================
 class PersonalityEngineV2:
 
     def __init__(self):
+
         self.state = PersonalityState()
 
-    # -----------------------------------------------------
-    # UPDATE FROM USER INPUT
-    # -----------------------------------------------------
+        self.history = []
+
+        self.max_history = 10
+
+    # ==========================================
+    # UPDATE
+    # ==========================================
     def update(self, text: str):
+        
+        text = text.replace(".", "").replace(",", "").strip()
 
-        result = classify(text)
+        if not text:
+            return
 
-        self.state.last_user_text = text
-        self.state.last_intent = result["intent"]
-        self.state.last_interaction_ts = time.time()
+        text = text.lower().strip()
 
-        # mood shaping
-        if result["mood"] == "playful":
-            self.state.mood = "playful"
-            self.state.verbosity = 0.6
+        self._track_history(text)
 
-        elif result["mood"] == "focused":
-            self.state.mood = "focused"
-            self.state.verbosity = 0.3
+        self._check_mode_switch(text)
+
+        self._detect_mood(text)
+
+        self.state.last_update = time.time()
+
+    # ==========================================
+    # HISTORY
+    # ==========================================
+    def _track_history(self, text):
+
+        self.history.append(text)
+
+        if len(self.history) > self.max_history:
+            self.history.pop(0)
+
+    # ==========================================
+    # MODE SWITCHING
+    # ==========================================
+    def _check_mode_switch(self, text):
+
+        if "assistant mode" in text:
+            self.state.mode = "assistant"
+
+        elif "playful mode" in text:
+            self.state.mode = "playful"
+
+        elif "jarvis mode" in text:
+            self.state.mode = "jarvis"
+
+    # ==========================================
+    # MOOD DETECTION
+    # ==========================================
+    def _detect_mood(self, text):
+
+        if any(word in text for word in [
+            "sad",
+            "upset",
+            "depressed",
+            "frustrated",
+            "angry"
+        ]):
+            self.state.mood = "supportive"
+
+        elif any(word in text for word in [
+            "excited",
+            "awesome",
+            "great",
+            "happy"
+        ]):
+            self.state.mood = "positive"
 
         else:
             self.state.mood = "neutral"
-            self.state.verbosity = 0.5
 
-        return self.state
+    # ==========================================
+    # MODE PROMPTS
+    # ==========================================
+    def _assistant_prompt(self):
 
-    # -----------------------------------------------------
-    # INTERRUPT HANDLING
-    # -----------------------------------------------------
-    def on_interrupt(self):
-        self.state.interrupted = True
-        self.state.mood = "focused"
-        self.state.verbosity = 0.2
-
-    def clear_interrupt(self):
-        self.state.interrupted = False
-
-    # -----------------------------------------------------
-    # RESPONSE STYLE ENGINE
-    # -----------------------------------------------------
-    def style_instruction(self) -> str:
-
-        if self.state.mood == "focused":
-            return "Be extremely concise. One sentence max."
-
-        if self.state.mood == "playful":
-            return "Be witty but brief. Light humor allowed."
-
-        return "Be natural, helpful, conversational."
-
-    # -----------------------------------------------------
-    # SYSTEM PROMPT BUILDER (IMPORTANT)
-    # -----------------------------------------------------
-    def system_prompt(self) -> str:
-
-        return f"""
-You are Jarvis, a real-time voice AI assistant.
-
-Personality State:
-- Mood: {self.state.mood}
-- Verbosity: {self.state.verbosity}
-- Last Intent: {self.state.last_intent}
+        return """
+You are a professional AI assistant.
 
 Rules:
-- {self.style_instruction()}
-- Never be overly verbose unless asked
-- Respond in spoken conversational format
-- Stay context-aware across turns
+- Be concise.
+- Be accurate.
+- Be direct.
+- Prefer short answers.
+- Avoid unnecessary humor.
 """
+
+    def _playful_prompt(self):
+
+        return """
+You are a friendly and playful AI assistant.
+
+Rules:
+- Be warm.
+- Add light humor when appropriate.
+- Sound conversational.
+- Keep responses voice-friendly.
+- Never be annoying.
+"""
+
+    def _jarvis_prompt(self):
+
+        return """
+You are Jarvis.
+
+Rules:
+- Speak elegantly.
+- Be intelligent.
+- Be confident.
+- Sound calm and capable.
+- Use short sophisticated responses.
+- Avoid lengthy explanations unless requested.
+"""
+
+    # ==========================================
+    # MOOD OVERLAY
+    # ==========================================
+    def _mood_overlay(self):
+
+        if self.state.mood == "supportive":
+
+            return """
+User may be frustrated.
+Respond with empathy and patience.
+"""
+
+        if self.state.mood == "positive":
+
+            return """
+User appears enthusiastic.
+Match positive energy.
+"""
+
+        return ""
+
+    # ==========================================
+    # SYSTEM PROMPT
+    # ==========================================
+    def system_prompt(self):
+
+        if self.state.mode == "assistant":
+            base = self._assistant_prompt()
+
+        elif self.state.mode == "playful":
+            base = self._playful_prompt()
+
+        else:
+            base = self._jarvis_prompt()
+
+        mood = self._mood_overlay()
+
+        return f"""
+{base}
+
+{mood}
+
+Current Mode:
+{self.state.mode}
+
+Current Mood:
+{self.state.mood}
+
+Keep answers optimized for voice conversations.
+"""
+
+    # ==========================================
+    # PUBLIC HELPERS
+    # ==========================================
+    def mode(self):
+        return self.state.mode
+
+    def mood(self):
+        return self.state.mood
+
+    def snapshot(self):
+
+        return {
+            "mode": self.state.mode,
+            "mood": self.state.mood,
+            "history_size": len(self.history)
+        }
+
+    def reset(self):
+
+        self.state = PersonalityState()
+        self.history.clear()
+

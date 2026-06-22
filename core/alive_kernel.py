@@ -136,7 +136,14 @@ async def cognitive_loop():
         print(f"[CI-AUDIO] HEARD: {text}")
 
         # =================================================
-        # LAYER 1 — INTENT (MUST NEVER FAIL)
+        # 🔥 CRITICAL FIX: UPDATE PERSONALITY HERE
+        # =================================================
+        personality.update(text)
+
+        print(f"[CI-MODE] mode={personality.state.mode} mood={personality.state.mood}")
+
+        # =================================================
+        # LAYER 1 — INTENT
         # =================================================
         intent = intent_router(text)
 
@@ -155,6 +162,7 @@ async def cognitive_loop():
                 text,
                 system_prompt=personality.system_prompt()
             ):
+
                 if is_interrupted():
                     final_text = ""
                     break
@@ -168,18 +176,28 @@ async def cognitive_loop():
         final_text = final_text.strip()
 
         # =================================================
-        # LAYER 3 — HARD FALLBACK (NO SILENCE EVER)
+        # LAYER 3 — FALLBACK
         # =================================================
         if not final_text:
             print("[CI-FALLBACK] triggered")
-            final_text = "I understand. How can I help you?"
+
+            # MODE-AWARE FALLBACK (THIS IS WHAT YOU WERE MISSING)
+            mode = personality.state.mode
+
+            if mode == "playful":
+                final_text = "Haha 😄 I'm in playful mode now!"
+
+            elif mode == "jarvis":
+                final_text = "Understood. Jarvis mode active."
+
+            else:
+                final_text = "I understand. How can I help you?"
 
         print(f"[CI-TTS] {final_text}")
 
         response_guard.update(text, final_text)
         tts_queue.put(final_text)
-
-
+        
 # =========================================================
 # VAD LOOP
 # =========================================================

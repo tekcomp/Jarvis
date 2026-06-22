@@ -1,9 +1,10 @@
 # ==============================
-# core/contract.py (COGNITIVE CONTRACT CORE v1)
-# ==============================
+# core/contract.py (OR wherever CI-FALLBACK exists)
 
-from core.brain import generate_response, stream_response, reset as brain_reset
+from core.personality_engine_v2 import PersonalityEngineV2
+from core.brain import route_intent
 
+personality = PersonalityEngineV2()
 
 # =========================================================
 # PUBLIC API (ONLY THING TESTS SEE)
@@ -12,16 +13,40 @@ from core.brain import generate_response, stream_response, reset as brain_reset
 # =========================================================
 # CI SAFE ENTRYPOINT (SYNC)
 # =========================================================
-def handle(text: str) -> str:
-    """
-    CI + tests ONLY use this.
-    Stable deterministic interface.
-    """
+def handle(text: str):
 
-    if not text:
-        return ""
+    # -----------------------------
+    # 1. UPDATE PERSONALITY FIRST
+    # -----------------------------
+    personality.update(text)
 
-    return generate_response(text)
+    # -----------------------------
+    # 2. MODE-AWARE ROUTING
+    # -----------------------------
+    response = route_intent(text)
+
+    # -----------------------------
+    # 3. CRITICAL FIX: NO FALLBACK OVERRIDE
+    # -----------------------------
+    if response and response.strip():
+        return response
+
+    # -----------------------------
+    # 4. ONLY NOW USE PERSONALITY FALLBACK
+    # -----------------------------
+    mode = personality.mode()
+
+    if mode == "playful":
+        return "Haha 😄 I'm not sure, but I'm having fun trying!"
+
+    if mode == "jarvis":
+        return "I require more information to proceed, sir."
+
+    if mode == "assistant":
+        return "I understand. How can I help you?"
+
+    # FINAL SAFETY
+    return "I am ready."
 
 
 # =========================================================
@@ -34,7 +59,7 @@ def reset():
     """
 
     try:
-        brain_reset()
+        personality.reset()
     except Exception:
         pass
 
