@@ -3,7 +3,7 @@ from core.mode_parser import detect_mode
 import datetime
 
 # =========================================================
-# SINGLE SOURCE OF TRUTH
+# SINGLE ENGINE
 # =========================================================
 engine = get_engine()
 
@@ -16,13 +16,16 @@ def route_intent(text: str):
     t = text.lower()
 
     # --------------------------
-    # MODE SWITCH
+    # MODE SWITCH (HIGHEST PRIORITY)
     # --------------------------
     mode = detect_mode(text)
 
     if mode:
+
         engine.mode = mode
-        return None
+
+        # 🔥 IMPORTANT: return IMMEDIATELY so fallback cannot override
+        return f"Switched to {mode} mode."
 
     # --------------------------
     # INTENTS
@@ -35,13 +38,15 @@ def route_intent(text: str):
         return datetime.datetime.now().strftime("%A, %B %d, %Y")
 
     if "joke" in t:
-        return "__JOKE__"
+        if engine.mode == "playful":
+            return "Haha 😄 Why did the AI cross the road? For fun!"
+        return "Why did the AI cross the road? To optimize the reward function."
 
     return None
 
 
 # =========================================================
-# STREAM RESPONSE
+# STREAM RESPONSE (SINGLE TRUTH PATH)
 # =========================================================
 def stream_response(text: str, system_prompt=None, context=None):
 
@@ -50,14 +55,14 @@ def stream_response(text: str, system_prompt=None, context=None):
     response = route_intent(text)
 
     # --------------------------
-    # MODE-AWARE FALLBACK
+    # CLEAN MODE FALLBACK (ONLY HERE)
     # --------------------------
-    if not response:
+    if response is None:
 
         mode = engine.mode
 
         if mode == "playful":
-            response = "Haha 😄 I'm in playful mode now!"
+            response = "Haha 😄 I'm in playful mode!"
         elif mode == "assistant":
             response = "I understand. How can I help you?"
         elif mode == "jarvis":
@@ -66,14 +71,7 @@ def stream_response(text: str, system_prompt=None, context=None):
             response = "I am online."
 
     # --------------------------
-    # JOKE OVERRIDE
+    # STREAM
     # --------------------------
-    if response == "__JOKE__":
-
-        if engine.mode == "playful":
-            response = "😄 Why did the AI cross the road? For fun!"
-        else:
-            response = "Why did the AI cross the road? To optimize the reward function."
-
-    for w in response.split():
-        yield w + " "
+    for word in response.split():
+        yield word + " "

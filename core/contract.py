@@ -1,22 +1,43 @@
-from core.brain_v3 import classify_intent, update_state, generate_response
 from core.personality_engine_v2 import get_engine
+from core.brain import route_intent
 
 engine = get_engine()
 
 
+# =========================================================
+# CI ENTRYPOINT
+# =========================================================
 def handle(text: str):
 
-    intent = classify_intent(text)
+    engine.update(text)
 
-    # update state first
-    mode_change = update_state(intent, text)
+    response = route_intent(text)
 
-    if mode_change:
-        return mode_change
+    if response:
+        return response
 
-    # generate response
-    return generate_response(intent, text)
+    # ONLY SAFE FALLBACK
+    if engine.mode == "playful":
+        return "Haha 😄 I'm having fun!"
+
+    if engine.mode == "assistant":
+        return "I understand. How can I help you?"
+
+    return "Understood."
 
 
+# =========================================================
+# RESET
+# =========================================================
 def reset():
-    engine.reset()
+    try:
+        engine.reset()
+    except Exception:
+        pass
+
+
+# =========================================================
+# STREAM WRAPPER
+# =========================================================
+def stream(text: str):
+    return stream_response(text)

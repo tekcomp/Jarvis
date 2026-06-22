@@ -1,18 +1,32 @@
-# core/mode_parser.py (NEW FILE OR INLINE)
-
-import re
-
 def detect_mode(text: str):
+
     t = text.lower()
 
-    # flexible matching (fixes "travis", "play for", etc.)
-    if re.search(r"\b(playful)\b", t):
+    # --------------------------
+    # PLAYFUL MODE
+    # --------------------------
+    if "playful" in t:
         return "playful"
 
-    if re.search(r"\b(jarvis)\b", t):
+    if "fun mode" in t:
+        return "playful"
+
+    if "switch to play" in t:
+        return "playful"
+
+    # --------------------------
+    # JARVIS MODE
+    # --------------------------
+    if "jarvis" in t:
         return "jarvis"
 
-    if re.search(r"\b(assistant)\b", t):
+    # --------------------------
+    # ASSISTANT MODE
+    # --------------------------
+    if "assistant" in t:
+        return "assistant"
+
+    if "help mode" in t:
         return "assistant"
 
     return None
