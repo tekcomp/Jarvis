@@ -21,7 +21,7 @@ from core.audio_state import audio_state
 
 from core.personality_engine_v2 import get_engine
 from core.response_guard import ResponseGuard
-
+from core.noise_filter import is_valid_transcript
 
 # =========================================================
 # INIT
@@ -47,9 +47,53 @@ def intent_router(text: str):
 
     if "date" in t:
         return f"Today is {now.strftime('%A, %B %d, %Y')}."
-
+    
     if "joke" in t:
         return "Why did the AI cross the road? To optimize the reward function."
+
+    # ---------------------------------
+    # HOLIDAYS
+    # ---------------------------------
+
+    if "holiday" in t:
+
+        if "january" in t:
+            return "January holidays: New Year's Day, Martin Luther King Jr. Day."
+
+        if "february" in t:
+            return "February holidays: Presidents Day, Valentine's Day."
+
+        if "march" in t:
+            return "March holidays: St. Patrick's Day."
+
+        if "april" in t:
+            return "April holidays: Easter, Earth Day."
+
+        if "may" in t:
+            return "May holidays: Memorial Day."
+
+        if "june" in t:
+            return "June holidays: Juneteenth, Father's Day."
+
+        if "july" in t:
+            return "July holidays: Independence Day."
+
+        if "august" in t:
+            return "August holidays: No major U.S. federal holidays."
+
+        if "september" in t:
+            return "September holidays: Labor Day."
+
+        if "october" in t:
+            return "October holidays: Columbus Day, Halloween."
+
+        if "november" in t:
+            return "November holidays: Veterans Day, Thanksgiving."
+
+        if "december" in t:
+            return "December holidays: Christmas Eve, Christmas Day, New Year's Eve."
+
+        return "Please specify a month."
 
     return None
 
@@ -84,8 +128,11 @@ def tts_worker():
 
             try:
                 print(f"[JARVIS TTS] {text}")
+                print("BEFORE SPEAK")
                 speak(text)
-
+                print("AFTER SPEAK")
+            except Exception as e:
+                print("TTS ERROR:", e)
             finally:
                 system_busy.clear()
                 audio_state.tts_finished()
@@ -132,6 +179,10 @@ async def cognitive_loop():
             continue
 
         text = text.strip().lower()
+
+        if not is_valid_transcript(text):
+            print(f"[CI-FILTER] rejected: {text}")
+            continue
 
         print(f"[CI-AUDIO] HEARD: {text}")
 

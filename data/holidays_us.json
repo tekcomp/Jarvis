@@ -1,0 +1,48 @@
+{
+    "january": [
+        "New Year's Day (Jan 1)",
+        "Martin Luther King Jr. Day (3rd Monday of January)"
+    ],
+    "february": [
+        "Valentine's Day (Feb 14)",
+        "Presidents' Day (3rd Monday of February)"
+    ],
+    "march": [
+        "St. Patrick's Day (Feb 17 - note: US observance varies)",
+        "Women's History Month (all March)"
+    ],
+    "april": [
+        "April Fool's Day (Apr 1)",
+        "Earth Day (Apr 22)"
+    ],
+    "may": [
+        "Labor Day (international varies; US Labor Day is September)",
+        "Memorial Day (last Monday of May)"
+    ],
+    "june": [
+        "Juneteenth (June 19)",
+        "Father's Day (3rd Sunday of June)"
+    ],
+    "july": [
+        "Independence Day (July 4)"
+    ],
+    "august": [
+        "No major US federal holidays"
+    ],
+    "september": [
+        "Labor Day (1st Monday of September)",
+        "Patriot Day (Sept 11)"
+    ],
+    "october": [
+        "Columbus Day / Indigenous Peoples' Day (2nd Monday of October)",
+        "Halloween (Oct 31)"
+    ],
+    "november": [
+        "Veterans Day (Nov 11)",
+        "Thanksgiving (4th Thursday of November)"
+    ],
+    "december": [
+        "Christmas Day (Dec 25)",
+        "New Year's Eve (Dec 31)"
+    ]
+}
