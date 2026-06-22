@@ -23,6 +23,14 @@ from core.personality_engine_v2 import get_engine
 from core.response_guard import ResponseGuard
 from core.noise_filter import is_valid_transcript
 
+
+from core.wake_gate import contains_wake_word, strip_wake_word
+from core.session_manager import (
+    open_session,
+    touch,
+    session_active,
+)
+
 # =========================================================
 # INIT
 # =========================================================
@@ -185,6 +193,28 @@ async def cognitive_loop():
             continue
 
         print(f"[CI-AUDIO] HEARD: {text}")
+
+        # =================================================
+        # WAKE GATE V1
+        # =================================================
+
+        if contains_wake_word(text):
+
+            open_session()
+
+            text = strip_wake_word(text)
+
+            if not text:
+                tts_queue.put("Yes sir.")
+                continue
+
+        elif not session_active():
+
+            print("[WAKE] ignored")
+            continue
+
+        else:
+            touch()
 
         # =================================================
         # 🔥 CRITICAL FIX: UPDATE PERSONALITY HERE
