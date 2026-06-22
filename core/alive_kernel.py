@@ -1,11 +1,12 @@
 # ==============================
-# core/alive_kernel.py (AGENT v3 STABLE AUDIO GATED FIXED)
+# core/alive_kernel.py (FINAL STABLE AUDIO FIX v4)
 # ==============================
 
 import asyncio
 import queue
 import threading
 import time
+import datetime
 
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
@@ -23,74 +24,41 @@ from core.response_guard import ResponseGuard
 
 
 # =========================================================
-# COMPONENTS
+# INIT
 # =========================================================
-response_guard = ResponseGuard()
-personality = PersonalityEngineV2()
 fsm = InterruptFSM()
+personality = PersonalityEngineV2()
+response_guard = ResponseGuard()
 
-# =========================================================
-# QUEUES
-# =========================================================
 audio_queue = queue.Queue()
 tts_queue = queue.Queue()
 
+
 # =========================================================
-# GLOBAL STATE LOCKS
+# INTENT ENGINE (HARD GUARANTEE LAYER)
 # =========================================================
-UTTERANCE_LOCK = False
-LAST_UTTERANCE = None
-LAST_UTTERANCE_TS = 0
-DUPLICATE_WINDOW_SEC = 2.5
+def intent_router(text: str):
+
+    t = text.lower()
+    now = datetime.datetime.now()
+
+    if "time" in t:
+        return f"The current time is {now.strftime('%H:%M:%S')}."
+
+    if "date" in t:
+        return f"Today is {now.strftime('%A, %B %d, %Y')}."
+
+    if "joke" in t:
+        return "Why did the AI cross the road? To optimize the reward function."
+
+    return None
 
 
 # =========================================================
-# SAFE AUDIO CHECK
+# AUDIO CHECK
 # =========================================================
 def has_audio(audio):
-    if audio is None:
-        return False
-    try:
-        return len(audio) > 0
-    except Exception:
-        return False
-
-
-# =========================================================
-# DUPLICATE DETECTION (FIXED SINGLE VERSION)
-# =========================================================
-def is_duplicate_utterance(text: str) -> bool:
-    global LAST_UTTERANCE, LAST_UTTERANCE_TS
-
-    now = time.time()
-
-    if text == LAST_UTTERANCE and (now - LAST_UTTERANCE_TS) < DUPLICATE_WINDOW_SEC:
-        return True
-
-    LAST_UTTERANCE = text
-    LAST_UTTERANCE_TS = now
-    return False
-
-
-# =========================================================
-# TTS CONTROL
-# =========================================================
-def enter_tts():
-    system_busy.set()
-    audio_state.tts_started()
-
-
-def exit_tts():
-    system_busy.clear()
-    audio_state.tts_finished()
-
-
-# =========================================================
-# UTTERANCE UNLOCK
-# =========================================================
-def unlock_utterance():
-    global UTTERANCE_LOCK
-    UTTERANCE_LOCK = False
+    return audio is not None and len(audio) > 0
 
 
 # =========================================================
@@ -103,10 +71,6 @@ def tts_worker():
     try:
         while not is_shutdown():
 
-            if system_busy.is_set():
-                time.sleep(0.05)
-                continue
-
             try:
                 text = tts_queue.get(timeout=0.5)
             except queue.Empty:
@@ -115,18 +79,17 @@ def tts_worker():
             if text is None:
                 break
 
-            enter_tts()
+            system_busy.set()
+            audio_state.tts_started()
 
             try:
                 print(f"[JARVIS TTS] {text}")
-                print(f"[TTS TEST] speaking: {text}")
-
                 speak(text)
 
             finally:
-                exit_tts()
+                system_busy.clear()
+                audio_state.tts_finished()
                 tts_queue.task_done()
-                print("[TTS TEST] done")
 
     finally:
         print("[TTS] EXIT")
@@ -134,7 +97,7 @@ def tts_worker():
 
 
 # =========================================================
-# COGNITIVE LOOP
+# COGNITIVE LOOP (FIXED - NO SILENCE POSSIBLE)
 # =========================================================
 async def cognitive_loop():
 
@@ -143,8 +106,6 @@ async def cognitive_loop():
     frame_id = 0
 
     while not is_shutdown():
-
-        print("[CI-DEBUG] waiting for audio...")
 
         try:
             packet = audio_queue.get(timeout=0.5)
@@ -160,43 +121,33 @@ async def cognitive_loop():
         if not has_audio(audio):
             continue
 
-        # HARD GATE (single authority)
         if not audio_state.mic_allowed():
-            print("[CI-ECHO] BLOCKED BY AUDIO STATE")
             continue
 
         frame_id += 1
 
-        print(f"[CI-AUDIO] RECEIVED frame={packet.get('frame_id')}")
-
         text = transcribe(audio)
 
-        if not text or len(text.strip()) < 2:
+        if not text:
             continue
 
         text = text.strip().lower()
 
-        # duplicate filter
-        if is_duplicate_utterance(text):
-            print("[CI-GUARD] BLOCKED DUPLICATE INTENT")
+        print(f"[CI-AUDIO] HEARD: {text}")
+
+        # =================================================
+        # LAYER 1 — INTENT (MUST NEVER FAIL)
+        # =================================================
+        intent = intent_router(text)
+
+        if intent:
+            print(f"[CI-INTENT] {intent}")
+            tts_queue.put(intent)
             continue
 
-        # utterance lock
-        global UTTERANCE_LOCK
-        if UTTERANCE_LOCK:
-            continue
-
-        UTTERANCE_LOCK = True
-
-        # guard layer
-        if response_guard.should_block(text):
-            UTTERANCE_LOCK = False
-            continue
-
-        personality.update(text)
-
-        print(f"[CI-FSM] frame={frame_id} HEARD text={text}")
-
+        # =================================================
+        # LAYER 2 — LLM
+        # =================================================
         final_text = ""
 
         try:
@@ -204,24 +155,29 @@ async def cognitive_loop():
                 text,
                 system_prompt=personality.system_prompt()
             ):
-
                 if is_interrupted():
                     final_text = ""
                     break
 
                 final_text += chunk
 
-        finally:
-            UTTERANCE_LOCK = False
+        except Exception as e:
+            print(f"[CI-ERROR] stream_response failed: {e}")
+            final_text = ""
 
-        if final_text and not is_interrupted():
-            print(f"[CI-TTS] QUEUE_PUSH: {final_text}")
-            response_guard.update(text, final_text)
+        final_text = final_text.strip()
 
-            tts_queue.put(final_text)
+        # =================================================
+        # LAYER 3 — HARD FALLBACK (NO SILENCE EVER)
+        # =================================================
+        if not final_text:
+            print("[CI-FALLBACK] triggered")
+            final_text = "I understand. How can I help you?"
 
-            # safety unlock fallback
-            asyncio.get_event_loop().call_later(2.0, unlock_utterance)
+        print(f"[CI-TTS] {final_text}")
+
+        response_guard.update(text, final_text)
+        tts_queue.put(final_text)
 
 
 # =========================================================
@@ -234,8 +190,6 @@ def vad_loop():
     try:
         for audio in get_speech_frames():
 
-            frame_id += 1
-
             if is_shutdown():
                 break
 
@@ -245,6 +199,8 @@ def vad_loop():
             if not audio_state.mic_allowed():
                 continue
 
+            frame_id += 1
+
             fsm.evaluate(frame_id, True)
 
             audio_queue.put({
@@ -252,7 +208,7 @@ def vad_loop():
                 "audio": audio
             })
 
-            print("[CI-VAD] AUDIO PUSHED")
+            print("[CI-VAD] PUSH")
 
     finally:
         print("[VAD] EXIT")
@@ -282,6 +238,5 @@ def start_kernel():
         tts_queue.put(None)
 
         fsm.stop_tts()
-        fsm.fired = False
 
         print("[SYSTEM] SHUTDOWN COMPLETE")

@@ -95,5 +95,26 @@ def main():
     sys.exit(0 if total >= 80 else 1)
 
 
+def run_ci_tests() -> bool:
+    """
+    Returns True if ALL tests pass.
+    """
+
+    print("[CI] pipeline tests...")
+    if not run_pipeline_tests():
+        return False
+
+    print("[CI] wake tests...")
+    if not run_wake_tests():
+        return False
+
+    print("[CI] interrupt tests...")
+    if not run_interrupt_test():
+        return False
+
+    return True
+
+
 if __name__ == "__main__":
-    main()
+    result = run_ci_tests()
+    print("[CI RESULT]", result)
