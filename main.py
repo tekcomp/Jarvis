@@ -6,7 +6,23 @@ import sys
 
 from tests.ci_runner import run_ci_tests
 from core.alive_kernel import start_kernel
+import builtins
+import time as _time
 
+# protect critical names
+assert callable(_time.strftime)
+import builtins
+
+
+assert callable(_time.strftime), "time module overwritten!"
+
+def debug_types():
+    import core.brain as brain
+
+    print("route_intent:", type(brain.route_intent))
+    print("stream_response:", type(brain.stream_response))
+
+debug_types()
 
 def boot():
 

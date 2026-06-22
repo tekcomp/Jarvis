@@ -1,215 +1,154 @@
-# core/personality_engine_v2.py
-
-
-# ==========================================
-# core/personality_engine_v2.py
-# Personality Engine v2
-# Production Ready
-# ==========================================
-
 from dataclasses import dataclass
 import time
 
 
+# =========================================================
+# STATE
+# =========================================================
 @dataclass
 class PersonalityState:
     mode: str = "jarvis"
     mood: str = "neutral"
+    emotion: str = "neutral"
+    emotion_strength: float = 0.0
     last_update: float = 0.0
 
 
+# =========================================================
+# SINGLETON HOLDER
+# =========================================================
+_ENGINE_SINGLETON = None
+
+
+# =========================================================
+# ENGINE
+# =========================================================
 class PersonalityEngineV2:
 
     def __init__(self):
-
         self.state = PersonalityState()
-
         self.history = []
+        self.max_history = 12
 
-        self.max_history = 10
+    # =====================================================
+    # COMPAT: MODE ACCESS
+    # =====================================================
+    @property
+    def mode(self):
+        return self.state.mode
 
-    # ==========================================
+    @mode.setter
+    def mode(self, value):
+        self.state.mode = value
+
+    @property
+    def mood(self):
+        return self.state.mood
+
+    @mood.setter
+    def mood(self, value):
+        self.state.mood = value
+
+    # =====================================================
     # UPDATE
-    # ==========================================
+    # =====================================================
     def update(self, text: str):
-        
-        text = text.replace(".", "").replace(",", "").strip()
 
         if not text:
             return
 
         text = text.lower().strip()
 
-        self._track_history(text)
-
-        self._check_mode_switch(text)
-
-        self._detect_mood(text)
-
-        self.state.last_update = time.time()
-
-    # ==========================================
-    # HISTORY
-    # ==========================================
-    def _track_history(self, text):
-
         self.history.append(text)
 
         if len(self.history) > self.max_history:
             self.history.pop(0)
 
-    # ==========================================
-    # MODE SWITCHING
-    # ==========================================
-    def _check_mode_switch(self, text):
+        self.state.last_update = time.time()
 
-        if "assistant mode" in text:
-            self.state.mode = "assistant"
+        self._detect_mood(text)
+        self._detect_emotion(text)
 
-        elif "playful mode" in text:
-            self.state.mode = "playful"
-
-        elif "jarvis mode" in text:
-            self.state.mode = "jarvis"
-
-    # ==========================================
-    # MOOD DETECTION
-    # ==========================================
-    def _detect_mood(self, text):
-
-        if any(word in text for word in [
-            "sad",
-            "upset",
-            "depressed",
-            "frustrated",
-            "angry"
-        ]):
-            self.state.mood = "supportive"
-
-        elif any(word in text for word in [
-            "excited",
-            "awesome",
-            "great",
-            "happy"
-        ]):
-            self.state.mood = "positive"
-
-        else:
-            self.state.mood = "neutral"
-
-    # ==========================================
-    # MODE PROMPTS
-    # ==========================================
-    def _assistant_prompt(self):
-
-        return """
-You are a professional AI assistant.
-
-Rules:
-- Be concise.
-- Be accurate.
-- Be direct.
-- Prefer short answers.
-- Avoid unnecessary humor.
-"""
-
-    def _playful_prompt(self):
-
-        return """
-You are a friendly and playful AI assistant.
-
-Rules:
-- Be warm.
-- Add light humor when appropriate.
-- Sound conversational.
-- Keep responses voice-friendly.
-- Never be annoying.
-"""
-
-    def _jarvis_prompt(self):
-
-        return """
-You are Jarvis.
-
-Rules:
-- Speak elegantly.
-- Be intelligent.
-- Be confident.
-- Sound calm and capable.
-- Use short sophisticated responses.
-- Avoid lengthy explanations unless requested.
-"""
-
-    # ==========================================
-    # MOOD OVERLAY
-    # ==========================================
-    def _mood_overlay(self):
-
-        if self.state.mood == "supportive":
-
-            return """
-User may be frustrated.
-Respond with empathy and patience.
-"""
-
-        if self.state.mood == "positive":
-
-            return """
-User appears enthusiastic.
-Match positive energy.
-"""
-
-        return ""
-
-    # ==========================================
-    # SYSTEM PROMPT
-    # ==========================================
+    # =====================================================
+    # MODE-AWARE PROMPT (🔥 THIS WAS MISSING)
+    # =====================================================
     def system_prompt(self):
 
-        if self.state.mode == "assistant":
-            base = self._assistant_prompt()
-
-        elif self.state.mode == "playful":
-            base = self._playful_prompt()
-
+        if self.state.mode == "playful":
+            base = "You are a friendly playful AI."
+        elif self.state.mode == "assistant":
+            base = "You are a helpful AI assistant."
         else:
-            base = self._jarvis_prompt()
+            base = "You are Jarvis, a precise assistant."
 
-        mood = self._mood_overlay()
+        emotion = self._emotion_bias()
+
+        if emotion == "calm":
+            emo_text = "User may be frustrated. Be calm and supportive."
+        elif emotion == "energy":
+            emo_text = "User is excited. Match energy slightly."
+        else:
+            emo_text = "Maintain neutral tone."
 
         return f"""
 {base}
 
-{mood}
+{emo_text}
 
-Current Mode:
-{self.state.mode}
+Mode: {self.state.mode}
+Emotion: {self.state.emotion}
+Strength: {self.state.emotion_strength:.2f}
+""".strip()
 
-Current Mood:
-{self.state.mood}
+    # =====================================================
+    # EMOTION
+    # =====================================================
+    def _detect_mood(self, text):
 
-Keep answers optimized for voice conversations.
-"""
+        if any(w in text for w in ["sad", "angry", "frustrated"]):
+            self.state.mood = "supportive"
+        elif any(w in text for w in ["happy", "great", "awesome"]):
+            self.state.mood = "positive"
+        else:
+            self.state.mood = "neutral"
 
-    # ==========================================
-    # PUBLIC HELPERS
-    # ==========================================
-    def mode(self):
-        return self.state.mode
+    def _detect_emotion(self, text):
 
-    def mood(self):
-        return self.state.mood
+        if any(w in text for w in ["error", "broken", "fix", "stuck"]):
+            self.state.emotion = "frustrated"
+            self.state.emotion_strength = min(1.0, self.state.emotion_strength + 0.3)
 
-    def snapshot(self):
+        elif any(w in text for w in ["wow", "cool", "love", "awesome"]):
+            self.state.emotion = "excited"
+            self.state.emotion_strength = min(1.0, self.state.emotion_strength + 0.2)
 
-        return {
-            "mode": self.state.mode,
-            "mood": self.state.mood,
-            "history_size": len(self.history)
-        }
+        else:
+            self.state.emotion_strength *= 0.85
 
+            if self.state.emotion_strength < 0.2:
+                self.state.emotion = "neutral"
+
+    def _emotion_bias(self):
+
+        if self.state.emotion == "frustrated":
+            return "calm"
+        if self.state.emotion == "excited":
+            return "energy"
+        return "neutral"
+
+    # =====================================================
+    # RESET
+    # =====================================================
     def reset(self):
-
         self.state = PersonalityState()
         self.history.clear()
 
+
+# =========================================================
+# SINGLETON
+# =========================================================
+def get_engine():
+    global _ENGINE_SINGLETON
+    if _ENGINE_SINGLETON is None:
+        _ENGINE_SINGLETON = PersonalityEngineV2()
+    return _ENGINE_SINGLETON

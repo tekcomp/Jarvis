@@ -1,3 +1,3 @@
-from core.personality_engine_v2 import PersonalityEngineV2
+from core.personality_engine_v2 import get_engine
 
-personality = PersonalityEngineV2()
+personality = get_engine()

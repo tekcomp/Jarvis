@@ -1,76 +1,56 @@
-# ==============================
-# core/contract.py (OR wherever CI-FALLBACK exists)
-
-from core.personality_engine_v2 import PersonalityEngineV2
+from core.personality_engine_v2 import get_engine
 from core.brain import route_intent
 
-personality = PersonalityEngineV2()
+# SINGLE SOURCE OF TRUTH
+personality = get_engine()
+
 
 # =========================================================
-# PUBLIC API (ONLY THING TESTS SEE)
-# =========================================================
-
-# =========================================================
-# CI SAFE ENTRYPOINT (SYNC)
+# MAIN ENTRYPOINT (CI USES THIS)
 # =========================================================
 def handle(text: str):
 
-    # -----------------------------
-    # 1. UPDATE PERSONALITY FIRST
-    # -----------------------------
     personality.update(text)
 
-    # -----------------------------
-    # 2. MODE-AWARE ROUTING
-    # -----------------------------
     response = route_intent(text)
 
-    # -----------------------------
-    # 3. CRITICAL FIX: NO FALLBACK OVERRIDE
-    # -----------------------------
     if response and response.strip():
         return response
 
-    # -----------------------------
-    # 4. ONLY NOW USE PERSONALITY FALLBACK
-    # -----------------------------
-    mode = personality.mode()
+    # fallback MUST be mode-aware
+    mode = personality.mode
 
     if mode == "playful":
-        return "Haha 😄 I'm not sure, but I'm having fun trying!"
+        return "Haha 😄 I'm in playful mode!"
 
     if mode == "jarvis":
-        return "I require more information to proceed, sir."
+        return "I require more information, sir."
 
     if mode == "assistant":
         return "I understand. How can I help you?"
 
-    # FINAL SAFETY
     return "I am ready."
 
 
 # =========================================================
-# CI LIFECYCLE RESET
+# RESET (FIX FOR TESTS)
 # =========================================================
 def reset():
     """
-    Resets all transient cognitive state.
-    Safe no-op for now, extensible later.
+    CI EXPECTS THIS FUNCTION.
+    MUST EXIST AT MODULE LEVEL.
     """
-
     try:
         personality.reset()
     except Exception:
         pass
 
+    return True
+
 
 # =========================================================
-# STREAMING INTERFACE (RUNTIME ONLY)
+# STREAM WRAPPER (OPTIONAL)
 # =========================================================
 def stream(text: str):
-    """
-    Runtime streaming interface.
-    CI tests SHOULD NOT use this directly.
-    """
-
+    from core.brain import stream_response
     return stream_response(text)

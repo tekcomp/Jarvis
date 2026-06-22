@@ -19,7 +19,7 @@ from core.interruption import is_interrupted
 from core.interrupt_fsm import InterruptFSM
 from core.audio_state import audio_state
 
-from core.personality_engine_v2 import PersonalityEngineV2
+from core.personality_engine_v2 import get_engine
 from core.response_guard import ResponseGuard
 
 
@@ -27,7 +27,7 @@ from core.response_guard import ResponseGuard
 # INIT
 # =========================================================
 fsm = InterruptFSM()
-personality = PersonalityEngineV2()
+personality = get_engine()
 response_guard = ResponseGuard()
 
 audio_queue = queue.Queue()
@@ -197,7 +197,7 @@ async def cognitive_loop():
 
         response_guard.update(text, final_text)
         tts_queue.put(final_text)
-        
+
 # =========================================================
 # VAD LOOP
 # =========================================================
