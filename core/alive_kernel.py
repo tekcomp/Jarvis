@@ -11,7 +11,7 @@ import datetime
 from stt.vad import get_speech_frames
 from stt.whisper import transcribe
 from core.brain import stream_response
-from tts.voice import speak
+from tts.voice_async import speak, start_tts_engine
 
 from core.runtime_state import system_busy
 from core.shutdown import is_shutdown, trigger_shutdown
@@ -323,6 +323,7 @@ def start_kernel():
 
     threading.Thread(target=vad_loop, daemon=True).start()
     threading.Thread(target=tts_worker, daemon=True).start()
+    start_tts_engine()
 
     try:
         asyncio.run(cognitive_loop())
