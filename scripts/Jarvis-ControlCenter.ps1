@@ -67,7 +67,11 @@ function Show-LogFile {
     Write-Host ""
     
     if (Test-Path $VoiceLogFile) {
-        Get-Content $VoiceLogFile -Tail 100
+        $content = Get-Content $VoiceLogFile -Tail 100
+        Write-Host $content
+        Write-Host ""
+        Write-Host "---" -ForegroundColor Gray
+        Write-Host "Total entries: $($(Get-Content $VoiceLogFile | Measure-Object -Line).Lines)" -ForegroundColor Gray
     }
     else {
         Write-Host "No logs available yet." -ForegroundColor Yellow
@@ -185,36 +189,93 @@ function Start-VoiceAssistant {
         Write-Host "Logs are being saved to: $VoiceLogFile" -ForegroundColor Gray
         Write-Host ""
         
-        # Monitor for crashes
-        Start-Sleep 2
-        
-        if ($process.HasExited) {
-            Write-Host ""
-            Write-Host "ERROR: Voice assistant exited immediately!" -ForegroundColor Red
-            Write-Host ""
-            
-            $stderr = Get-Content "$LogDir\voice_stderr.tmp" -ErrorAction SilentlyContinue
-            if ($stderr) {
-                Write-Host "STDERR:" -ForegroundColor Red
-                Write-Host $stderr
-                Log "Python stderr: $stderr" "ERROR"
-            }
-            
-            $stdout = Get-Content "$LogDir\voice_stdout.tmp" -ErrorAction SilentlyContinue
-            if ($stdout) {
-                Write-Host ""
-                Write-Host "STDOUT:" -ForegroundColor Yellow
-                Write-Host $stdout
-                Log "Python stdout: $stdout" "ERROR"
+        # Monitor for crashes - wait 5 seconds this time
+        Write-Host "Monitoring process..." -ForegroundColor Cyan
+        for ($i = 0; $i -lt 5; $i++) {
+            Start-Sleep 1
+            if ($process.HasExited) {
+                Write-Host "Process exited at second $($i+1)" -ForegroundColor Yellow
+                break
             }
         }
+        
+        if ($process.HasExited) {
+            # Process crashed - extract and display error
+            Start-Sleep 1
+            $stderr = Get-Content "$LogDir\voice_stderr.tmp" -ErrorAction SilentlyContinue | Out-String
+            $stdout = Get-Content "$LogDir\voice_stdout.tmp" -ErrorAction SilentlyContinue | Out-String
+            
+            Write-Host ""
+            Write-Host "========================================" -ForegroundColor Red
+            Write-Host "    VOICE ASSISTANT CRASHED" -ForegroundColor Red
+            Write-Host "========================================" -ForegroundColor Red
+            Write-Host ""
+            
+            # Parse error type
+            $errorType = "UNKNOWN ERROR"
+            $suggestion = ""
+            
+            if ($stderr -match "ModuleNotFoundError: No module named '([^']+)'") {
+                $module = $matches[1]
+                $errorType = "MISSING MODULE: $module"
+                $suggestion = "Run in terminal: pip install $module"
+            }
+            elseif ($stderr -match "ImportError") {
+                $errorType = "IMPORT ERROR"
+                $suggestion = "Check dependencies are installed"
+            }
+            elseif ($stderr -match "SyntaxError") {
+                $errorType = "SYNTAX ERROR IN PYTHON CODE"
+                $suggestion = "Check Python code for syntax errors"
+            }
+            elseif ($stderr -match "AttributeError") {
+                $errorType = "ATTRIBUTE ERROR"
+                $suggestion = "Check code references valid attributes"
+            }
+            elseif ($stderr -match "TypeError") {
+                $errorType = "TYPE ERROR"
+                $suggestion = "Check function/method argument types"
+            }
+            
+            Write-Host "[ERROR] $errorType" -ForegroundColor Red
+            Write-Host ""
+            
+            if ($suggestion) {
+                Write-Host "[ACTION] $suggestion" -ForegroundColor Yellow
+                Write-Host ""
+            }
+            
+            if ($stderr) {
+                Write-Host "--------- PYTHON ERROR ---------" -ForegroundColor Red
+                Write-Host $stderr -ForegroundColor White
+                Log "Crash - stderr: $stderr" "ERROR"
+            }
+            
+            if ($stdout) {
+                Write-Host ""
+                Write-Host "--------- PYTHON OUTPUT ---------" -ForegroundColor Yellow
+                Write-Host $stdout -ForegroundColor White
+                Log "Crash - stdout: $stdout" "ERROR"
+            }
+            
+            Write-Host ""
+            Write-Host "See option 11 to view all logs" -ForegroundColor Gray
+            Write-Host ""
+        }
         else {
-            Write-Host "Voice assistant is running. Check logs for activity." -ForegroundColor Green
+            Write-Host "[SUCCESS] Voice assistant is RUNNING" -ForegroundColor Green
+            Write-Host ""
+            Write-Host "Use option 11 to view live logs" -ForegroundColor Cyan
+            Write-Host ""
         }
         
     }
     catch {
-        Write-Host "Error launching voice assistant: $_" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host "    LAUNCH FAILED" -ForegroundColor Red
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host "Error: $_" -ForegroundColor Red
         Log "Launch error: $_" "ERROR"
     }
     
