@@ -1,9 +1,32 @@
 {
+  // === Python Environment & Analysis ===
   "python.analysis.extraPaths": [
     "."
   ],
   "python.analysis.autoSearchPaths": true,
   "python.formatting.provider": "ruff",
   "editor.formatOnSave": true,
-  "python-envs.defaultEnvManager": "ms-python.python:system"
+  "python-envs.defaultEnvManager": "ms-python.python:system",
+  // === Default Chat Model (best reasoning) ===
+  "chat.model": "ollama:phi4:14b",
+  "chat.provider": "ollama",
+  // === Inline Autocomplete (fastest + best quality) ===
+  "codeCompletions.model": "ollama:qwen2.5-coder:7b",
+  "codeCompletions.provider": "ollama",
+  // === Edit / Apply Actions (coding tasks) ===
+  "chat.editModel": "ollama:qwen2.5-coder:14b",
+  "chat.applyModel": "ollama:qwen2.5-coder:14b",
+  // === Optional: fallback models ===
+  "chat.fallbackModels": [
+    "ollama:llama3:latest",
+    "ollama:phi3.5:latest"
+  ],
+  // === Ollama connection ===
+  "ollama.serverUrl": "http://localhost:11434",
+  // === Performance tuning ===
+  "chat.maxModelTokens": 32768,
+  "chat.temperature": 0.2,
+  "codeCompletions.temperature": 0.1,
+  // === Disable telemetry ===
+  "chat.languageModel.experimental.allowAnonymousTelemetry": false
 }

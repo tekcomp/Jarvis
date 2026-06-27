@@ -1,0 +1,64 @@
+{
+    "systemPrompt": "You are Cline. Use local models for fast tasks and OpenRouter models for heavy reasoning and coding.",
+    "routing": {
+        "enable": true,
+        "rules": [
+            {
+                "match": [
+                    "reason",
+                    "think",
+                    "plan",
+                    "analyze",
+                    "chain of thought"
+                ],
+                "use": "deepseek/deepseek-r1"
+            },
+            {
+                "match": [
+                    "code",
+                    "fix",
+                    "refactor",
+                    "debug",
+                    "explain code",
+                    "generate code"
+                ],
+                "use": "qwen/qwen-2.5-coder-32b"
+            },
+            {
+                "match": [
+                    "fast",
+                    "quick",
+                    "short"
+                ],
+                "use": "phi3.5:latest"
+            },
+            {
+                "match": [
+                    "offline",
+                    "local",
+                    "no internet"
+                ],
+                "use": "phi4:14b"
+            }
+        ]
+    },
+    "models": {
+        "local_reasoning": "phi4:14b",
+        "local_coding": "qwen2.5-coder:14b",
+        "local_fast": "phi3.5:latest",
+        "local_fallback": "llama3:latest",
+        "remote_reasoning": "deepseek/deepseek-r1",
+        "remote_coding": "qwen/qwen-2.5-coder-32b",
+        "remote_chat": "meta-llama/llama-3.1-70b-instruct",
+        "remote_fast": "qwen/qwen-2.5-14b-instruct"
+    },
+    "provider": "hybrid",
+    "ollama": {
+        "apiBase": "http://localhost:11434",
+        "temperature": 0.2,
+        "num_ctx": 32768
+    },
+    "openrouter": {
+        "apiKey": "${OPENROUTER_API_KEY}"
+    }
+}

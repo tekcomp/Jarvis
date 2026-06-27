@@ -388,7 +388,7 @@ function Show-SystemStatus {
     Wait-Jarvis
 }
 
-function Kill-VoiceAssistant {
+function Stop-VoiceAssistant {
 
     Log "Graceful shutdown requested by user" "INFO"
 
