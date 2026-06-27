@@ -1,7 +1,6 @@
-```powershell
 # ============================================================
 # JARVIS CONTROL CENTER
-# Version 2.0 - With Multi-Level Logging
+# Version 2.1 - With Multi-Level Logging + Graceful Kill
 # ============================================================
 
 $ModelPath = "F:\media\Models\ollama-models"
@@ -27,11 +26,11 @@ function Log {
     
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     $logMessage = "[$timestamp] [$Level] $Message"
-    
-    # Write to file
-    Add-Content -Path $VoiceLogFile -Value $logMessage
-    
-    # Write to console based on log level
+
+    # Write to file WITH NEWLINE
+    Add-Content -Path $VoiceLogFile -Value ($logMessage + "`r`n")
+
+    # Console output based on log level
     if ($LogLevel -eq "VERBOSE") {
         Write-Host $logMessage -ForegroundColor Gray
     }
@@ -51,10 +50,9 @@ function Log {
     }
 }
 
+
 function Set-LogLevel {
-    param(
-        [string]$Level
-    )
+    param([string]$Level)
     $script:LogLevel = $Level
     Log "Log level set to: $Level" "INFO"
 }
@@ -68,7 +66,28 @@ function Show-LogFile {
     
     if (Test-Path $VoiceLogFile) {
         $content = Get-Content $VoiceLogFile -Tail 100
-        Write-Host $content
+
+        foreach ($line in $content) {
+            if ($line -match "
+
+        \[ERROR\]
+
+        ") {
+                Write-Host $line -ForegroundColor Red
+            }
+            elseif ($line -match "
+
+        \[WARN\]
+
+        ") {
+                Write-Host $line -ForegroundColor Yellow
+            }
+            else {
+                Write-Host $line -ForegroundColor White
+            }
+        }
+
+
         Write-Host ""
         Write-Host "---" -ForegroundColor Gray
         Write-Host "Total entries: $($(Get-Content $VoiceLogFile | Measure-Object -Line).Lines)" -ForegroundColor Gray
@@ -78,7 +97,7 @@ function Show-LogFile {
     }
     
     Write-Host ""
-    Pause-Jarvis
+    Wait-Jarvis
 }
 
 function Clear-LogFile {
@@ -86,21 +105,17 @@ function Clear-LogFile {
         Clear-Content $VoiceLogFile
         Write-Host "Log file cleared." -ForegroundColor Green
     }
-    Pause-Jarvis
+    Wait-Jarvis
 }
 
-function Pause-Jarvis {
+function Wait-Jarvis {
     Write-Host ""
     Read-Host "Press ENTER to continue"
 }
 
 function Get-VoiceAssistantStatus {
     $proc = Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*main.py*" }
-
-    if ($proc) {
-        return "RUNNING (PID $($proc.Id))"
-    }
-
+    if ($proc) { return "RUNNING (PID $($proc.Id))" }
     return "STOPPED"
 }
 
@@ -115,9 +130,7 @@ function Wait-OllamaReady {
                 return $true
             }
         }
-        catch {
-            Start-Sleep 1
-        }
+        catch { Start-Sleep 1 }
     }
     
     Write-Host "Ollama did not respond in time." -ForegroundColor Red
@@ -132,7 +145,6 @@ function Start-VoiceAssistant {
 
     Log "Voice assistant startup initiated" "INFO"
 
-    # Prerequisite 1: Start Ollama if not running
     if (-not (Get-Process ollama -ErrorAction SilentlyContinue)) {
         Write-Host "[1/3] Starting Ollama..." -ForegroundColor Cyan
         Log "Starting Ollama server..." "DEBUG"
@@ -143,25 +155,22 @@ function Start-VoiceAssistant {
         Log "Ollama already running" "DEBUG"
     }
 
-    # Prerequisite 2: Wait for Ollama to be ready
     Write-Host "[2/3] Checking Ollama readiness..." -ForegroundColor Cyan
     Log "Checking Ollama readiness..." "DEBUG"
     if (-not (Wait-OllamaReady)) {
         Write-Host "Failed to start Ollama. Aborting." -ForegroundColor Red
         Log "Ollama failed to respond. Startup aborted." "ERROR"
-        Pause-Jarvis
+        Wait-Jarvis
         return
     }
 
-    # Prerequisite 3: Check if voice assistant already running
     if (Get-Process python -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like "*main.py*" }) {
         Write-Host "Voice assistant already running!" -ForegroundColor Yellow
         Log "Voice assistant already running" "WARN"
-        Pause-Jarvis
+        Wait-Jarvis
         return
     }
 
-    # Start the voice assistant
     Write-Host "[3/3] Starting voice assistant..." -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Launching Jarvis voice listening mode..." -ForegroundColor Green
@@ -172,7 +181,6 @@ function Start-VoiceAssistant {
     Set-Location $JarvisPath
 
     try {
-        # Capture output to log file
         $process = Start-Process `
             -FilePath $PythonExe `
             -ArgumentList "main.py" `
@@ -189,7 +197,6 @@ function Start-VoiceAssistant {
         Write-Host "Logs are being saved to: $VoiceLogFile" -ForegroundColor Gray
         Write-Host ""
         
-        # Monitor for crashes - wait 5 seconds this time
         Write-Host "Monitoring process..." -ForegroundColor Cyan
         for ($i = 0; $i -lt 5; $i++) {
             Start-Sleep 1
@@ -200,7 +207,6 @@ function Start-VoiceAssistant {
         }
         
         if ($process.HasExited) {
-            # Process crashed - extract and display error
             Start-Sleep 1
             $stderr = Get-Content "$LogDir\voice_stderr.tmp" -ErrorAction SilentlyContinue | Out-String
             $stdout = Get-Content "$LogDir\voice_stdout.tmp" -ErrorAction SilentlyContinue | Out-String
@@ -211,7 +217,6 @@ function Start-VoiceAssistant {
             Write-Host "========================================" -ForegroundColor Red
             Write-Host ""
             
-            # Parse error type
             $errorType = "UNKNOWN ERROR"
             $suggestion = ""
             
@@ -279,7 +284,7 @@ function Start-VoiceAssistant {
         Log "Launch error: $_" "ERROR"
     }
     
-    Pause-Jarvis
+    Wait-Jarvis
 }
 
 function Stop-VoiceAssistant {
@@ -294,8 +299,25 @@ function Stop-VoiceAssistant {
         Write-Host "Voice assistant is not running." -ForegroundColor Yellow
     }
     
-    Pause-Jarvis
+    Wait-Jarvis
 }
+
+# ============================================================
+# NEW FUNCTION — GRACEFUL SHUTDOWN
+# ============================================================
+
+function Stop-VoiceAssistantGracefully {
+
+    Write-Host "Sending graceful shutdown signal..." -ForegroundColor Yellow
+
+    $shutdownFile = "$JarvisPath\shutdown.flag"
+    Set-Content -Path $shutdownFile -Value "shutdown"
+
+    Write-Host "Graceful shutdown signal sent." -ForegroundColor Green
+    Wait-Jarvis
+}
+
+# ============================================================
 
 function Show-Header {
     Clear-Host
@@ -308,11 +330,7 @@ function Show-Header {
 
 function Get-OllamaStatus {
     $proc = Get-Process ollama -ErrorAction SilentlyContinue
-
-    if ($proc) {
-        return "RUNNING (PID $($proc.Id))"
-    }
-
+    if ($proc) { return "RUNNING (PID $($proc.Id))" }
     return "STOPPED"
 }
 
@@ -367,14 +385,27 @@ function Show-SystemStatus {
     ollama list
 
     Write-Host ""
-    Pause-Jarvis
+    Wait-Jarvis
 }
 
-function Launch-Model {
+function Kill-VoiceAssistant {
 
-    param(
-        [string]$Model
-    )
+    Log "Graceful shutdown requested by user" "INFO"
+
+    Write-Host "Sending graceful shutdown signal..." -ForegroundColor Yellow
+
+    $shutdownFile = "$JarvisPath\shutdown.flag"
+    Set-Content -Path $shutdownFile -Value "shutdown"
+
+    Log "Shutdown flag written to $shutdownFile" "DEBUG"
+
+    Write-Host "Graceful shutdown signal sent." -ForegroundColor Green
+    Wait-Jarvis
+}
+
+
+function Start-Model {
+    param([string]$Model)
 
     if (-not (Get-Process ollama -ErrorAction SilentlyContinue)) {
         Start-JarvisServer
@@ -411,7 +442,8 @@ while ($true) {
     Write-Host "3 - Status"
     Write-Host ""
     Write-Host "VOICE ASSISTANT"
-    Write-Host "10 - Stop Voice Assistant"
+    Write-Host "10 - Stop Voice Assistant (Hard Kill)"
+    Write-Host "14 - Kill Voice Assistant (Graceful Shutdown)"
     Write-Host ""
     Write-Host "MODELS"
     Write-Host "4 - GLM 4.7 Flash"
@@ -429,59 +461,29 @@ while ($true) {
 
     switch ($choice) {
 
-        "9" {
-            Start-VoiceAssistant
-        }
+        "9" { Start-VoiceAssistant }
 
-        "1" {
-            Start-JarvisServer
-            Pause-Jarvis
-        }
+        "1" { Start-JarvisServer; Wait-Jarvis }
 
-        "2" {
-            Stop-JarvisServer
-            Pause-Jarvis
-        }
+        "2" { Stop-JarvisServer; Wait-Jarvis }
 
-        "3" {
-            Show-SystemStatus
-        }
+        "3" { Show-SystemStatus }
 
-        "4" {
-            Launch-Model "glm-4.7-flash"
-        }
+        "4" { Launch-Model "glm-4.7-flash" }
 
-        "5" {
-            Launch-Model "qwen2.5-coder:14b"
-        }
+        "5" { Launch-Model "qwen2.5-coder:14b" }
 
-        "6" {
-            Launch-Model "qwen3:14b"
-        }
+        "6" { Launch-Model "qwen3:14b" }
 
-        "7" {
-            Clear-Host
-            ollama list
-            Pause-Jarvis
-        }
+        "7" { Clear-Host; ollama list; Wait-Jarvis }
 
-        "8" {
-            Clear-Host
-            nvidia-smi
-            Pause-Jarvis
-        }
+        "8" { Clear-Host; nvidia-smi; Wait-Jarvis }
 
-        "10" {
-            Stop-VoiceAssistant
-        }
+        "10" { Stop-VoiceAssistant }
 
-        "11" {
-            Show-LogFile
-        }
+        "11" { Show-LogFile }
 
-        "12" {
-            Clear-LogFile
-        }
+        "12" { Clear-LogFile }
 
         "13" {
             Clear-Host
@@ -500,12 +502,12 @@ while ($true) {
                 default { Write-Host "Invalid selection." -ForegroundColor Red }
             }
             
-            Pause-Jarvis
+            Wait-Jarvis
         }
 
-        "0" {
-            break
-        }
+        "14" { Kill-VoiceAssistant }
+
+        "0" { break }
 
         default {
             Write-Host "Invalid selection." -ForegroundColor Red
@@ -513,4 +515,3 @@ while ($true) {
         }
     }
 }
-```

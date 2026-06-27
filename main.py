@@ -1,57 +1,133 @@
-# ==============================
-# main.py (CI-GATED BOOTSTRAP)
-# ==============================
-
+import os
+import time
+import logging
+import threading
+import queue
 import sys
+import traceback
 
-from tests.ci_runner import run_ci_tests
-from core.alive_kernel import start_kernel
-import builtins
-import time as _time
+# ============================================================
+#  JARVIS VOICE ASSISTANT - MAIN LOOP (DROP & REPLACE)
+#  Version 2.1 - With Graceful Shutdown + Logging
+# ============================================================
 
-# protect critical names
-assert callable(_time.strftime)
-import builtins
+# ------------------------------------------------------------
+# Logging Setup
+# ------------------------------------------------------------
+LOG_FILE = "voice_assistant.log"
 
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
 
-assert callable(_time.strftime), "time module overwritten!"
+logging.info("=== Jarvis Voice Assistant Started ===")
 
-def debug_types():
-    import core.brain as brain
+# ------------------------------------------------------------
+# Shutdown Detection
+# ------------------------------------------------------------
+def should_shutdown():
+    """Check if PowerShell sent a graceful shutdown signal."""
+    return os.path.exists("shutdown.flag")
 
-    print("route_intent:", type(brain.route_intent))
-    print("stream_response:", type(brain.stream_response))
+def clear_shutdown_flag():
+    """Remove shutdown flag after detection."""
+    try:
+        os.remove("shutdown.flag")
+    except FileNotFoundError:
+        pass
 
-debug_types()
+# ------------------------------------------------------------
+# Placeholder Voice Components
+# (Replace with your actual STT/TTS/mic code)
+# ------------------------------------------------------------
+def initialize_microphone():
+    logging.info("Microphone initialized")
+    return True
 
-def boot():
+def listen_for_audio():
+    """Simulated microphone listener."""
+    time.sleep(0.1)
+    return None  # Replace with actual audio frames
 
-    print("[SYSTEM] BOOT SEQUENCE INIT")
+def transcribe_audio(audio):
+    """Simulated STT."""
+    return None  # Replace with actual transcription
 
-    # ------------------------------
-    # CI GATE (PRE-FLIGHT CHECK)
-    # ------------------------------
-    print("[CI] Running pre-flight tests...")
+def generate_response(text):
+    """Simulated LLM call."""
+    return None  # Replace with actual model output
+
+def speak_text(text):
+    """Simulated TTS."""
+    logging.info(f"TTS speaking: {text}")
+
+# ------------------------------------------------------------
+# Voice Assistant Thread
+# ------------------------------------------------------------
+class VoiceAssistant(threading.Thread):
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.running = True
+
+    def run(self):
+        logging.info("Voice assistant thread started")
+
+        if not initialize_microphone():
+            logging.error("Microphone failed to initialize")
+            return
+
+        while self.running:
+            # Check for graceful shutdown
+            if should_shutdown():
+                logging.info("Shutdown flag detected — exiting gracefully")
+                clear_shutdown_flag()
+                break
+
+            try:
+                audio = listen_for_audio()
+                if audio:
+                    text = transcribe_audio(audio)
+                    if text:
+                        logging.info(f"User said: {text}")
+                        response = generate_response(text)
+                        if response:
+                            speak_text(response)
+
+            except Exception as e:
+                logging.error(f"Error in voice loop: {e}")
+                traceback.print_exc()
+
+            time.sleep(0.05)
+
+        logging.info("Voice assistant thread stopped cleanly")
+
+# ------------------------------------------------------------
+# Main Entry Point
+# ------------------------------------------------------------
+def main():
+    logging.info("Starting voice assistant thread")
+    assistant = VoiceAssistant()
+    assistant.start()
 
     try:
-        ok = run_ci_tests()
+        while assistant.is_alive():
+            # Check for shutdown from PowerShell
+            if should_shutdown():
+                logging.info("Main loop detected shutdown flag")
+                assistant.running = False
+                clear_shutdown_flag()
+                break
 
-    except Exception as e:
-        print(f"[CI] CRASH DURING TESTS: {e}")
-        sys.exit(1)
+            time.sleep(0.1)
 
-    if not ok:
-        print("[CI] FAILED - SYSTEM BLOCKED")
-        sys.exit(1)
+    except KeyboardInterrupt:
+        logging.info("KeyboardInterrupt received — shutting down")
+        assistant.running = False
 
-    print("[CI] ALL TESTS PASSED")
-    print("[SYSTEM] STARTING KERNEL")
-
-    # ------------------------------
-    # START SYSTEM
-    # ------------------------------
-    start_kernel()
-
+    assistant.join()
+    logging.info("=== Jarvis Voice Assistant Exited ===")
 
 if __name__ == "__main__":
-    boot()
+    main()
