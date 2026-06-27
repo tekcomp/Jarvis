@@ -1,0 +1,31 @@
+2026-06-27 02:31:45,090 [INFO] === Jarvis Voice Assistant Started ===
+2026-06-27 02:31:45,090 [INFO] Starting voice assistant thread
+2026-06-27 02:31:45,091 [INFO] Voice assistant thread started
+2026-06-27 02:31:45,091 [INFO] Microphone initialized
+2026-06-27 02:31:45,091 [INFO] Shutdown flag detected — exiting gracefully
+2026-06-27 02:31:45,091 [INFO] Main loop detected shutdown flag
+2026-06-27 02:31:45,092 [INFO] Voice assistant thread stopped cleanly
+2026-06-27 02:31:45,092 [INFO] === Jarvis Voice Assistant Exited ===
+2026-06-27 02:36:50,767 [INFO] === Jarvis Voice Assistant Started ===
+2026-06-27 02:36:50,767 [INFO] Starting voice assistant thread
+2026-06-27 02:36:50,767 [INFO] Voice assistant thread started
+2026-06-27 02:36:50,767 [INFO] Microphone initialized
+2026-06-27 02:40:33,368 [INFO] === Jarvis Voice Assistant Started ===
+2026-06-27 02:40:33,368 [INFO] Starting voice assistant thread
+2026-06-27 02:40:33,369 [INFO] Voice assistant thread started
+2026-06-27 02:40:33,369 [INFO] Microphone initialized
+2026-06-27 13:47:01,490 [INFO] === Jarvis Voice Assistant Started ===
+2026-06-27 13:47:01,490 [INFO] Starting voice assistant thread
+2026-06-27 13:47:01,491 [INFO] Voice assistant thread started
+2026-06-27 13:47:01,491 [INFO] Microphone initialized
+2026-06-27 13:47:01,491 [INFO] Main loop detected shutdown flag
+2026-06-27 13:47:01,491 [INFO] Shutdown flag detected — exiting gracefully
+2026-06-27 13:47:01,491 [INFO] Voice assistant thread stopped cleanly
+2026-06-27 13:47:01,491 [INFO] === Jarvis Voice Assistant Exited ===
+2026-06-27 13:57:50,608 [INFO] === Jarvis Voice Assistant Started ===
+2026-06-27 13:57:50,609 [INFO] Voice assistant thread started
+2026-06-27 14:06:43,751 [INFO] Shutdown flag detected — exiting voice assistant
+2026-06-27 14:06:43,751 [INFO] Voice assistant thread stopped cleanly
+2026-06-27 14:06:43,852 [INFO] === Jarvis Voice Assistant Exited ===
+2026-06-27 14:12:43,435 [INFO] === Jarvis Voice Assistant Started ===
+2026-06-27 14:12:43,436 [INFO] Voice assistant thread started

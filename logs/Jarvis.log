@@ -10,3 +10,20 @@
 [2026-06-25 12:00:46] Model path set to F:\media\Models\ollama-models
 [2026-06-25 12:00:46] Ollama already running (PID: 28476)
 [2026-06-25 12:00:46] Launching Jarvis chat with llama3
+[2026-06-26 01:42:37] === JARVIS STARTUP INITIATED ===
+[2026-06-26 01:42:37] Model path set to F:\media\Models\ollama-models
+[2026-06-26 01:42:37] Ollama already running (PID: 1740)
+[2026-06-26 01:42:37] Default model missing. Pulling llama3...
+[2026-06-26 01:42:49] Launching Jarvis chat with llama3
+[2026-06-26 02:05:33] === JARVIS STARTUP INITIATED ===
+[2026-06-26 02:05:33] Model path set to F:\media\Models\ollama-models
+[2026-06-26 02:05:33] Ollama already running (PID: 24144)
+[2026-06-26 02:05:33] Default model missing. Pulling llama3...
+[2026-06-26 02:06:56] Launching Jarvis chat with llama3
+[2026-06-26 08:51:31] === JARVIS STARTUP INITIATED ===
+[2026-06-26 08:51:31] Model path set to F:\media\Models\ollama-models
+[2026-06-26 08:51:31] Starting Ollama server...
+[2026-06-26 08:53:19] === JARVIS STARTUP INITIATED ===
+[2026-06-26 08:53:19] Model path set to F:\media\Models\ollama-models
+[2026-06-26 08:53:19] Ollama already running (PID: 29084)
+[2026-06-26 08:53:19] Launching Jarvis chat with llama3

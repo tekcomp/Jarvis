@@ -22,8 +22,16 @@ logging.info("=== Jarvis Voice Assistant Started ===")
 # ------------------------------------------------------------
 # Shutdown Flag Helpers
 # ------------------------------------------------------------
+SHUTDOWN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "shutdown.flag")
+
 def should_shutdown():
-    return os.path.exists("shutdown.flag")
+    return os.path.exists(SHUTDOWN_PATH)
+
+def clear_shutdown_flag():
+    try:
+        os.remove(SHUTDOWN_PATH)
+    except FileNotFoundError:
+        pass
 
 def clear_shutdown_flag():
     try:
