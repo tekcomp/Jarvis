@@ -146,13 +146,27 @@ $body = @{
     stream = $false
 } | ConvertTo-Json -Depth 3
 
-try {
-    Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" -Method POST -Body $body -ContentType "application/json" -TimeoutSec 30 | Out-Null
-    Log "Model warmup successful OK" "Green"
-}
-catch {
-    Log "Model warmup failed" "Red"
-    exit 1
+$maxRetries = 3
+$retryDelay = 3
+
+for ($i = 0; $i -lt $maxRetries; $i++) {
+    try {
+        $response = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" -Method POST -Body $body -ContentType "application/json" -TimeoutSec 30
+        Log "Model warmup successful OK" "Green"
+        break
+    }
+    catch {
+        if ($i -lt $maxRetries - 1) {
+            Log "Warmup attempt $($i + 1) failed, retrying in $retryDelay seconds..." "Yellow"
+            Start-Sleep -Seconds $retryDelay
+        }
+        else {
+            Log "Model warmup failed after $maxRetries attempts" "Red"
+            Log "Error: $($_.Exception.Message)" "Red"
+            Log "Tip: Check if Ollama is running and accessible" "Yellow"
+            exit 1
+        }
+    }
 }
 
 Log "JARVIS READY SYSTEM ONLINE" "Green"

@@ -9,3 +9,83 @@
 [07:05:11] STEP 4: Warming model...
 [07:05:32] Model warmup successful OK
 [07:05:32] JARVIS READY SYSTEM ONLINE
+[2026-06-28 08:05:35] === JARVIS STARTUP INITIATED ===
+[2026-06-28 08:05:36] Boot sequence started
+[2026-06-28 08:05:41] Model selected: glm-4.7-flash:latest
+[2026-06-28 08:05:41] STEP 1: Checking Ollama process...
+[2026-06-28 08:05:41] Ollama running (PID 26508)
+[2026-06-28 08:05:41] STEP 2: Waiting for port 11434...
+[2026-06-28 08:05:41] Waiting for port... (0/15)
+[2026-06-28 08:05:43] Waiting for port... (1/15)
+[2026-06-28 08:05:45] Waiting for port... (2/15)
+[2026-06-28 08:05:47] Waiting for port... (3/15)
+[2026-06-28 08:14:54] === JARVIS STARTUP INITIATED ===
+[2026-06-28 08:14:54] Boot sequence started
+[2026-06-28 08:14:59] Model selected: glm-4.7-flash:latest
+[2026-06-28 08:14:59] STEP 1: Checking Ollama process...
+[2026-06-28 08:14:59] Ollama running (PID 26508)
+[2026-06-28 08:14:59] STEP 2: Waiting for port 11434...
+[2026-06-28 08:14:59] Waiting for port... (0/15)
+[2026-06-28 08:15:01] Waiting for port... (1/15)
+[2026-06-28 08:15:03] Waiting for port... (2/15)
+[2026-06-28 08:55:13] Boot sequence started
+[2026-06-28 08:55:13] Ollama running (PID 26508)
+[2026-06-28 08:55:15] Port 11434 is open OK
+[2026-06-28 08:55:15] API responding OK
+[2026-06-28 08:55:15] Model selected: qwen2.5-coder:latest
+[2026-06-28 08:55:15] Model warmup failed
+[2026-06-28 09:39:26] Boot sequence started
+[2026-06-28 09:39:26] Ollama running (PID 26508)
+[2026-06-28 09:39:28] Port 11434 is open OK
+[2026-06-28 09:39:28] API responding OK
+[2026-06-28 09:39:28] Model selected: qwen2.5-coder:latest
+[2026-06-28 09:39:28] Model warmup failed
+[2026-06-28 09:42:44] Boot sequence started
+[2026-06-28 09:42:44] Ollama running (PID 26508)
+[2026-06-28 09:42:46] Port 11434 is open OK
+[2026-06-28 09:42:46] API responding OK
+[2026-06-28 09:42:46] Model selected: qwen2.5-coder:14b
+[2026-06-28 09:42:57] Model warmup successful
+[2026-06-28 09:42:57] JARVIS READY SYSTEM ONLINE
+[2026-06-28 09:42:57] Launching Jarvis chat with qwen2.5-coder:14b
+[2026-06-28 09:53:22] Boot sequence started
+[2026-06-28 09:53:22] Ollama running (PID 26508)
+[2026-06-28 09:53:25] Port 11434 is open OK
+[2026-06-28 09:53:25] API responding OK
+[2026-06-28 09:53:25] Model selected: qwen2.5-coder:14b
+[2026-06-28 09:53:55] Model warmup failed
+[2026-06-28 10:04:16] Boot sequence started
+[2026-06-28 10:04:16] Ollama running (PID 26508)
+[2026-06-28 10:04:19] Port 11434 is open OK
+[2026-06-28 10:04:19] API responding OK
+[2026-06-28 10:04:19] Model selected: qwen2.5-coder:14b
+[2026-06-28 10:04:29] Model warmup successful
+[2026-06-28 10:04:29] JARVIS READY SYSTEM ONLINE
+[2026-06-28 10:04:29] Launching Jarvis chat with qwen2.5-coder:14b
+[2026-06-28 10:30:45] === JARVIS STARTUP INITIATED ===
+[2026-06-28 10:30:45] Boot sequence started
+[2026-06-28 10:30:52] Model selected: glm-4.7-flash:latest
+[2026-06-28 10:30:52] STEP 1: Checking Ollama process...
+[2026-06-28 10:30:52] Ollama running (PID 16024 26508)
+[2026-06-28 10:30:52] STEP 2: Waiting for port 11434...
+[2026-06-28 10:30:52] Waiting for port... (0/15)
+[2026-06-28 10:30:54] Waiting for port... (1/15)
+[2026-06-28 10:30:56] Waiting for port... (2/15)
+[2026-06-28 10:30:58] Waiting for port... (3/15)
+[2026-06-28 10:31:00] Waiting for port... (4/15)
+[2026-06-28 10:31:02] Waiting for port... (5/15)
+[2026-06-28 10:31:04] Waiting for port... (6/15)
+[2026-06-28 10:31:18] Boot sequence started
+[2026-06-28 10:31:18] Ollama running (PID 16024 26508)
+[2026-06-28 10:31:21] Port 11434 is open OK
+[2026-06-28 10:31:21] API responding OK
+[2026-06-28 10:31:21] Model selected: gemma3:latest
+[2026-06-28 10:31:51] Model warmup failed
+[2026-06-28 10:40:18] Boot sequence started
+[2026-06-28 10:40:18] Ollama running (PID 16024 26508)
+[2026-06-28 10:40:20] Port 11434 is open OK
+[2026-06-28 10:40:20] API responding OK
+[2026-06-28 10:40:21] Model selected: gemma3:latest
+[2026-06-28 10:40:42] Model warmup successful
+[2026-06-28 10:40:42] JARVIS READY SYSTEM ONLINE
+[2026-06-28 10:40:42] Launching Jarvis chat with gemma3:latest

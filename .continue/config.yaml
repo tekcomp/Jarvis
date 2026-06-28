@@ -9,9 +9,11 @@ system_prompt: |
   5. Follow style rules.
 
   Routing Logic:
-  - Reasoning tasks → deepseek-r1
-  - Coding tasks → qwen-coder-32b
-  - General chat → llama-3.1-70b
+  - Reasoning tasks → phi3.5
+  - Coding tasks → qwen2.5-coder:14b
+  - Testing tasks → qwen2.5-coder:14b
+  - Boot/procedural tasks → glm-4.7-flash
+  - General chat → llama3:latest
   - Fast responses → qwen-14b-fast
   - Local tasks → phi4-local or qwen-coder-local
 
@@ -55,25 +57,27 @@ models:
     model: qwen2.5-coder:14b
     apiBase: http://localhost:11434
     roles: [chat, edit, apply]
-    capabilities: [code, tool_use]
+    capabilities: [code, tool_use, tests]
 
   - name: GLM 4.7 Flash
     provider: ollama
     model: glm-4.7-flash
     apiBase: http://localhost:11434
-    capabilities: [tool_use]
+    capabilities: [tool_use, procedural, boot]
 
   - name: Llama 3
     provider: ollama
     model: llama3:latest
     apiBase: http://localhost:11434
     roles: [chat]
+    capabilities: [chat]
 
   - name: Phi 3.5
     provider: ollama
     model: phi3.5:latest
     apiBase: http://localhost:11434
     roles: [chat]
+    capabilities: [reasoning, planning]
 
   - name: deepseek-r1
     provider: openrouter
@@ -110,17 +114,11 @@ models:
     model: AUTODETECT
 
 routing:
+  # Reasoning, planning, architecture
   - match: reasoning
-    use: deepseek-r1
+    use: phi3.5
 
+  # Coding, refactoring, integration tests
   - match: code
-    use: qwen-coder-32b
+    use: qwen-coder-14b
 
-  - match: chat
-    use: llama-3.1-70b
-
-  - match: fast
-    use: qwen-14b-fast
-
-  - match: local
-    use: phi4-local

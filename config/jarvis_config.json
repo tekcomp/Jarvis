@@ -1,0 +1,40 @@
+{
+    "model": {
+        "home_voice": {
+            "gemma3": "gemma3:2b",
+            "gemma3_4b": "gemma3:4b",
+            "gemma3_9b": "gemma3:9b",
+            "llama3_1_8b": "llama3.1:8b",
+            "qwen2_5_7b": "qwen2.5:7b",
+            "qwen2_5_14b": "qwen2.5:14b",
+            "default": "qwen2.5:14b"
+        },
+        "coding": {
+            "qwen2.5_coder_14b": "qwen2.5-coder:14b",
+            "default": "qwen2.5-coder:14b"
+        },
+        "fallback": "qwen2.5:14b"
+    },
+    "boot": {
+        "port": 11434,
+        "port_timeout": 15,
+        "api_timeout": 20,
+        "warmup_timeout": 30,
+        "port_check_interval": 2,
+        "api_check_interval": 2
+    },
+    "ui": {
+        "verbose": false,
+        "show_progress": true,
+        "use_colors": true
+    },
+    "features": {
+        "quick_restart": true,
+        "auto_model_select": true,
+        "health_cache": true
+    },
+    "performance": {
+        "max_retries": 2,
+        "backoff_strategy": "exponential"
+    }
+}
