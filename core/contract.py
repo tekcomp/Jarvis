@@ -5,22 +5,14 @@ engine = get_engine()
 
 
 def handle(text: str):
-
     engine.update(text)
-
     response = route_intent(text)
 
-    if response:
+    if response is not None:
         return response
 
-    mode = engine.mode
-
-    if mode == "playful":
-        return "Haha 😄 I'm having fun!"
-    elif mode == "assistant":
-        return "How can I help you?"
-    else:
-        return "Understood. Jarvis mode active."
+    # Return empty string for unrecognized intents (noise, invalid input)
+    return ""
 
 
 def reset():
