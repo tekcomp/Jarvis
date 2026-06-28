@@ -1,9 +1,8 @@
-
 # ==============================
-# JARVIS BOOT SYSTEM (CLEAN)
+# JARVIS BOOT SYSTEM
 # ==============================
 
-$logFile = "$env:USERPROFILE\Desktop\jarvis_boot.log"
+$logFile = "$PSScriptRoot\jarvis_boot.log"
 
 function Log($msg, $color = "White") {
     $line = "[$(Get-Date -Format 'HH:mm:ss')] $msg"
@@ -94,7 +93,7 @@ $i = 0
 while ($i -lt 15) {
 
     if (Test-Port 11434) {
-        Log "Port 11434 is open ✔" "Green"
+        Log "Port 11434 is open OK" "Green"
         $portReady = $true
         break
     }
@@ -125,7 +124,7 @@ $i = 0
 while ($i -lt 20) {
 
     if (Test-OllamaAPI) {
-        Log "API responding ✔" "Green"
+        Log "API responding OK" "Green"
         $apiReady = $true
         break
     }
@@ -141,7 +140,7 @@ if ($apiReady -eq $false) {
 }
 
 # ==============================
-# STEP 4 - MODEL WARMUP (SAFE)
+# STEP 4 - MODEL WARMUP
 # ==============================
 
 Log "STEP 4: Warming model..."
@@ -153,13 +152,8 @@ $body = @{
 } | ConvertTo-Json -Depth 3
 
 try {
-    Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" 
-    -Method POST `
-        -Body $body `
-        -ContentType "application/json" `
-        -TimeoutSec 30 | Out-Null
-
-    Log "Model warmup successful ✔" "Green"
+    Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" -Method POST -Body $body -ContentType "application/json" -TimeoutSec 30 | Out-Null
+    Log "Model warmup successful OK" "Green"
 }
 catch {
     Log "Model warmup failed (non-critical)" "Yellow"
@@ -169,7 +163,7 @@ catch {
 # DONE
 # ==============================
 
-Log "JARVIS READY ✔ SYSTEM ONLINE" "Green"
+Log "JARVIS READY SYSTEM ONLINE" "Green"
 
 Write-Host ""
 Write-Host "==============================" -ForegroundColor Green
