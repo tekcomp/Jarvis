@@ -1,31 +1,30 @@
-import numpy as np
-import whisper
+import speech_recognition as sr
 
 from core.logger import L3, LOG_LEVEL
 from core.duplex_guard import duplex
 
-model = whisper.load_model("medium")
-
-
 def transcribe(audio):
-
-    # 🔥 ignore TTS echo window
+    recognizer = sr.Recognizer()
+    
     if duplex.muted():
         return ""
 
-    if audio is None or len(audio) < 1000:
+    try:
+        with sr.AudioFile(audio) as source:
+            audio_data = recognizer.record(source)
+            text = recognizer.recognize_google(audio_data).strip().lower()
+    except sr.UnknownValueError:
+        L3("SPEECH RECOGNITION EMPTY RESULT")
+        return ""
+    except sr.RequestError as e:
+        L3(f"SPEECH RECOGNITION ERROR: {e}")
         return ""
 
-    audio = audio.astype(np.float32) / 32768.0
-
-    result = model.transcribe(audio)
-    text = result.get("text", "").strip().lower()
-
     if not text:
-        L3("WHISPER EMPTY RESULT")
+        L3("SPEECH RECOGNITION EMPTY RESULT")
         return ""
 
     if LOG_LEVEL >= 3:
-        L3(f"WHISPER: {text}")
+        L3(f"RECOGNIZED TEXT: {text}")
 
     return text
