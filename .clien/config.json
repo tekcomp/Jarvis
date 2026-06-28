@@ -38,7 +38,7 @@
         {
             "pattern": "local code",
             "use": "local_coder"
-        }
+        },
         {
             "pattern": "(?i)node|express|nestjs|nestjs controller|nestjs module|nestjs service|\\.controller\\.ts$|\\.service\\.ts$",
             "use": "coding"
