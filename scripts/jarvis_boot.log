@@ -89,3 +89,13 @@
 [2026-06-28 10:40:42] Model warmup successful
 [2026-06-28 10:40:42] JARVIS READY SYSTEM ONLINE
 [2026-06-28 10:40:42] Launching Jarvis chat with gemma3:latest
+[2026-06-28 11:03:34] Boot sequence started
+[2026-06-28 11:03:34] Ollama running (PID 16024 26508)
+[2026-06-28 11:03:37] Port 11434 is open OK
+[2026-06-28 11:03:37] API responding OK
+[2026-06-28 11:03:37] Model selected: gemma3:latest
+[2026-06-28 11:04:07] Model warmup failed
+[2026-06-28 11:04:30] Boot sequence started
+[2026-06-28 11:04:30] Ollama running (PID 16024 26508)
+[2026-06-28 11:04:32] Port 11434 is open OK
+[2026-06-28 11:04:32] API responding OK

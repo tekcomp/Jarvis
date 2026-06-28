@@ -9,6 +9,7 @@ system_prompt: |
   5. Follow style rules.
 
   Routing Logic:
+  - Angular tasks → qwen2.5-coder:14b
   - Reasoning tasks → phi3.5
   - Coding tasks → qwen2.5-coder:14b
   - Testing tasks → qwen2.5-coder:14b
@@ -114,11 +115,135 @@ models:
     model: AUTODETECT
 
 routing:
-  # Reasoning, planning, architecture
-  - match: reasoning
-    use: phi3.5
-
-  # Coding, refactoring, integration tests
-  - match: code
+  # -------------------------
+  # Angular Routing
+  # -------------------------
+  - name: angular-routing
+    match:
+      any:
+        - regex: "(?i)\\bangular\\b"
+        - regex: "(?i)\\bstandalone component\\b"
+        - regex: "(?i)\\bonpush\\b"
+        - regex: "(?i)\\brxjs\\b"
+        - regex: "(?i)\\btypescript\\b"
+        - regex: "\\.component\\.ts$"
+        - regex: "\\.service\\.ts$"
+        - regex: "src/app/"
     use: qwen-coder-14b
 
+  # -------------------------
+  # Reasoning, planning, architecture
+  # -------------------------
+  - name: reasoning-routing
+    match: reasoning
+    use: phi3.5
+
+  # -------------------------
+  # Coding, refactoring, integration tests
+  # -------------------------
+  - name: coding-routing
+    match: code
+    use: qwen-coder-14b
+
+  # -------------------------
+  # Testing tasks
+  # -------------------------
+  - name: testing-routing
+    match: tests
+    use: qwen-coder-14b
+
+  # -------------------------
+  # Boot / procedural tasks
+  # -------------------------
+  - name: procedural-routing
+    match: procedural
+    use: glm-4.7-flash
+
+  # -------------------------
+  # General chat
+  # -------------------------
+  - name: chat-routing
+    match: chat
+    use: llama3
+
+  # -------------------------
+  # Fast responses
+  # -------------------------
+  - name: fast-routing
+    match: fast
+    use: qwen-14b-fast
+
+  # -------------------------
+  # Local tasks
+  # -------------------------
+  - name: local-routing
+    match: local
+    use: phi4-local
+    
+  # -------------------------
+  # Backend: Node / Express / NestJS
+  # -------------------------
+  - name: backend-node-routing
+    match:
+      any:
+        - regex: "(?i)node"
+        - regex: "(?i)express"
+        - regex: "(?i)nestjs"
+        - regex: "(?i)nestjs controller"
+        - regex: "(?i)nestjs module"
+        - regex: "(?i)nestjs service"
+        - regex: "\\.controller\\.ts$"
+        - regex: "\\.service\\.ts$"
+    use: coding
+
+  # -------------------------
+  # Backend: Python (FastAPI / Flask)
+  # -------------------------
+  - name: backend-python-routing
+    match:
+      any:
+        - regex: "(?i)fastapi"
+        - regex: "(?i)flask"
+        - regex: "(?i)python backend"
+        - regex: "\\.py$"
+    use: coding
+
+  # -------------------------
+  # Backend: C# / .NET
+  # -------------------------
+  - name: backend-dotnet-routing
+    match:
+      any:
+        - regex: "(?i)dotnet"
+        - regex: "(?i)c#"
+        - regex: "(?i)asp\\.net"
+        - regex: "(?i)aspnet"
+        - regex: "(?i)entity framework"
+        - regex: "\\.cs$"
+    use: coding
+
+  # -------------------------
+  # Backend: SQL / Databases
+  # -------------------------
+  - name: backend-sql-routing
+    match:
+      any:
+        - regex: "(?i)sql"
+        - regex: "(?i)postgres"
+        - regex: "(?i)mysql"
+        - regex: "(?i)sqlite"
+        - regex: "(?i)database schema"
+        - regex: "(?i)migration"
+    use: coding
+
+  # -------------------------
+  # Backend: API Design / Architecture
+  # -------------------------
+  - name: backend-api-design-routing
+    match:
+      any:
+        - regex: "(?i)api design"
+        - regex: "(?i)rest api"
+        - regex: "(?i)openapi"
+        - regex: "(?i)swagger"
+    use: reasoning

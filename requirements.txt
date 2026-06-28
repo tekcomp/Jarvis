@@ -1,0 +1,36 @@
+# JARVIS AI Voice Assistant - Python Dependencies
+# Pinned versions for consistent environment setup
+
+# Core dependencies
+sounddevice>=0.4.6,<0.5.0
+numpy>=1.24.0,<2.0.0
+requests>=2.31.0,<3.0.0
+PyYAML>=6.0,<7.0.0
+
+# Monitoring and system utilities (optional but recommended)
+psutil>=5.9.0,<6.0.0
+
+# Web framework for health dashboard
+dash>=2.14.0,<3.0.0
+flask>=3.0.0,<4.0.0
+werkzeug>=3.0.0,<4.0.0
+
+# Testing framework
+pytest>=7.4.0,<8.0.0
+pytest-asyncio>=0.21.0,<1.0.0
+pytest-cov>=4.1.0,<5.0.0
+
+# WebSocket support (for monitoring)
+websockets>=12.0,<13.0
+
+# HTTP client
+httpx>=0.25.0,<1.0.0
+
+# Data validation
+pydantic>=2.5.0,<3.0.0
+
+# API client
+openai>=1.10.0,<2.0.0  # Ollama compatibility
+
+# Audio processing
+scipy>=1.11.0,<2.0.0
