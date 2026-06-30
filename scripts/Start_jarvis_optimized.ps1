@@ -45,19 +45,22 @@ function Get-SmartModel {
     param($config)
     
     $models = Get-ModelList -config $config
-    
+
+    # Helper: parameter_size comes back like "4.3B" or "8B"; strip unit and parse.
+    $paramNum = { param($m) [double]([regex]::Replace([string]$m.details.parameter_size, '[A-Za-z]', '')) }
+
     # Priority 1: Gemma 3 models (optimized for voice assistance)
-    $gemmaModels = $models | Where-Object { $_.name -like "gemma3:*" } | 
-    Sort-Object { [double]($_.details.parameter_size) } -Descending | 
+    $gemmaModels = $models | Where-Object { $_.name -like "gemma3:*" } |
+    Sort-Object $paramNum -Descending |
     Select-Object -First 1
     if ($gemmaModels) {
         Write-Host "Found Gemma 3 model: $($gemmaModels.name)" -ForegroundColor Cyan
         return $gemmaModels.name
     }
-    
+
     # Priority 2: Llama 3.1 models (general voice assistant)
-    $llamaModels = $models | Where-Object { $_.name -like "llama3.1:*" } | 
-    Sort-Object { [double]($_.details.parameter_size) } -Descending | 
+    $llamaModels = $models | Where-Object { $_.name -like "llama3.1:*" } |
+    Sort-Object $paramNum -Descending | 
     Select-Object -First 1
     if ($llamaModels) {
         Write-Host "Found Llama 3.1 model: $($llamaModels.name)" -ForegroundColor Cyan

@@ -47,8 +47,13 @@ tts_queue = queue.Queue()
 # =========================================================
 def intent_router(text: str):
 
-    t = text.lower()
+    t = text.lower().strip()
     now = datetime.datetime.now()
+
+    # ---- Voice shutdown (no wake word required) ----
+    SHUTDOWN_PHRASES = ("goodbye", "shut down", "shutdown", "power off", "go to sleep")
+    if any(p == t or p in t for p in SHUTDOWN_PHRASES):
+        return {"kind": "shutdown", "text": "Goodbye, sir."}
 
     if "time" in t:
         return f"The current time is {now.strftime('%H:%M:%S')}."
@@ -229,6 +234,18 @@ async def cognitive_loop():
         intent = intent_router(text)
 
         if intent:
+            # Tagged shutdown intent (dict) bypasses text reply path
+            if isinstance(intent, dict) and intent.get("kind") == "shutdown":
+                print(f"[CI-INTENT] {intent}")
+                tts_queue.put(intent["text"])
+                # Wait for the spoken line, then end the loop.
+                try:
+                    while not tts_queue.empty():
+                        await asyncio.sleep(0.1)
+                except Exception:
+                    pass
+                break  # exit cognitive_loop; finally{} handles graceful shutdown
+
             print(f"[CI-INTENT] {intent}")
             tts_queue.put(intent)
             continue
