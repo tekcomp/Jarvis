@@ -56,7 +56,7 @@ def intent_router(text: str):
         return {"kind": "shutdown", "text": "Goodbye, sir."}
 
     if "time" in t:
-        return f"The current time is {now.strftime('%H:%M:%S')}."
+        return f"The current time is {now.strftime('%I:%M %p')}."
 
     if "date" in t:
         return f"Today is {now.strftime('%A, %B %d, %Y')}."
