@@ -91,3 +91,17 @@
 
 [2026-06-27 14:12:43] [INFO] Voice assistant started with PID 11380
 
+[2026-06-27 15:56:06] [INFO] Voice assistant startup initiated
+
+[2026-06-27 15:56:06] [DEBUG] Ollama already running
+
+[2026-06-27 15:56:06] [DEBUG] Checking Ollama readiness...
+
+[2026-06-27 15:56:06] [DEBUG] Launching Python main.py...
+
+[2026-06-27 15:56:06] [INFO] Voice assistant started with PID 6260
+
+[2026-06-27 15:56:53] [INFO] Graceful shutdown requested by user
+
+[2026-06-27 15:56:53] [DEBUG] Shutdown flag written to C:\App\Ai\shutdown.flag
+
