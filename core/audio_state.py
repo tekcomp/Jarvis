@@ -28,10 +28,19 @@ class AudioState:
     # TTS EVENTS (canonical: tts_started/tts_finished)
     # Aliases for legacy callers (tts/voice_async.py)
     # -----------------------------------------------------
-    def tts_started(self):
+    def tts_started(self, hold_seconds: float = 0.0):
 
         self.tts_active = True
         self.last_tts_start = time.time()
+        # Default mute window; longer if caller requested.
+        hold = hold_seconds if (hold_seconds and hold_seconds > 0) else 2.5
+        if hold > self.echo_guard_seconds:
+            self.echo_guard_seconds = hold
+        if _duplex is not None:
+            try:
+                _duplex.start(hold_seconds=hold)
+            except Exception:
+                pass
 
     def tts_finished(self):
 
