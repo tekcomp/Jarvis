@@ -264,6 +264,16 @@ function Boot-System {
     }
     Log "Python: $py" "Cyan"
 
+    # ---- Refuse to boot if an audio kernel is already running ----
+    $pidFile = "C:\App\AI\state\kernel.pid"
+    if (Test-Path $pidFile) {
+        $existing = Get-Content $pidFile -ErrorAction SilentlyContinue
+        if ($existing -and (Get-Process -Id $existing -ErrorAction SilentlyContinue)) {
+            Log "Jarvis already running (PID $existing). Run Kill_Jarvis.bat to stop." "Yellow"
+            exit 0
+        }
+    }
+
     Set-Location "C:\App\AI"
     & python -c "from core.alive_kernel import start_kernel; start_kernel()"
     exit $LASTEXITCODE
