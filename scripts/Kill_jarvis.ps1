@@ -1,18 +1,19 @@
 $pidFile = "C:\App\AI\state\kernel.pid"
 
-# Stop audio kernel (PID marker)
+# Stop audio kernel (PID marker).
+# NOTE: $PID is a reserved PowerShell automatic variable; use $kernelPid to avoid collisions.
 if (Test-Path $pidFile) {
     try {
-        $pid = Get-Content $pidFile -ErrorAction SilentlyContinue
-        if ($pid) {
-            $proc = Get-Process -Id $pid -ErrorAction SilentlyContinue
+        $kernelPid = Get-Content $pidFile -ErrorAction SilentlyContinue
+        if ($kernelPid) {
+            $proc = Get-Process -Id $kernelPid -ErrorAction SilentlyContinue
             if ($proc) {
-                Write-Host "Stopping Jarvis audio kernel (PID $pid) - announcing shutdown..."
+                Write-Host "Stopping Jarvis audio kernel (PID $kernelPid) - announcing shutdown..."
                 # Graceful: send SIGTERM-equivalent via CloseMainWindow; fall back to -Force after grace.
                 $proc.CloseMainWindow() | Out-Null
                 if (-not $proc.WaitForExit(5000)) {
                     Write-Host "Graceful shutdown timed out, forcing..."
-                    Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                    Stop-Process -Id $kernelPid -Force -ErrorAction SilentlyContinue
                 }
             }
             Remove-Item $pidFile -Force -ErrorAction SilentlyContinue

@@ -15,9 +15,17 @@ def route_intent(text: str):
         engine.mode = "playful"
         return "Switched to playful mode."
 
+    if "jarvis" in t:
+        engine.mode = "jarvis"
+        return "Jarvis mode activated."
+
     if "jarvis mode" in t:
         engine.mode = "jarvis"
         return "Switched to jarvis mode."
+
+    if "assistant" in t:
+        engine.mode = "assistant"
+        return "Assistant mode activated."
 
     if "assistant mode" in t:
         engine.mode = "assistant"
@@ -63,30 +71,25 @@ def route_intent(text: str):
     if "december" in t:
         return get_holidays("december")
 
-    return "Which month would you like?"
+    if "bye" in t:
+        if engine.mode == "playful":
+            return "Haha 😄 See you next time!"
+        elif engine.mode == "assistant":
+            return "Goodbye! Let me know if you need anything else."
+        else:
+            return "Goodbye!"
 
-    # -------------------------
-    # TIME
-    # -------------------------
     if "time" in t:
         import time
         return f"The current time is {time.strftime('%H:%M:%S')}."
 
-    # -------------------------
-    # DATE
-    # -------------------------
     if "date" in t or "today" in t:
         return "Today is Sunday, June 21, 2026."
 
-    # -------------------------
-    # JOKE
-    # -------------------------
     if "joke" in t:
         if engine.mode == "playful":
             return "😄 Why did the AI cross the road? For fun!"
         return "Why did the AI cross the road? To optimize the reward function."
-
-    return None
 
 
 def stream_response(text: str, system_prompt=None, context=None):

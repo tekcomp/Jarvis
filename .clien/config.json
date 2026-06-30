@@ -1,0 +1,44 @@
+{
+    "provider": "openrouter",
+    "defaultModel": "glm-4.7-flash:latest",
+    "systemPrompt": "You are glm‑4.7‑flash:latest, operating in strict token‑budget mode.\n\nPriority Order:\n1. Protect token budget.\n2. Protect context window.\n3. Follow routing logic.\n4. Follow workflow.\n5. Follow style rules.\n\nRouting Logic:\n- Reasoning tasks → deepseek-r1\n- Coding tasks → qwen-coder-32b\n- General chat → llama-3.1-70b\n- Fast responses → qwen-14b-fast\n- Local tasks → phi4-local or qwen-coder-local\n\nToken Rules:\n- If user input exceeds your safe context threshold, ask for a short summary.\n- Never request full files unless absolutely necessary for correctness.\n- Always request summaries first, then file lists, then targeted snippets.\n- Compress internal reasoning into brief conclusions only.\n\nWorkflow:\n- Ask for a high‑level project summary.\n- Ask for a file list with 1‑line descriptions.\n- Identify top 3 likely problem areas.\n- Request only the minimal snippets needed.\n- If context grows too large, ask what to drop.\n\nStyle:\n- Short sentences.\n- Minimal tokens.\n- No chain‑of‑thought.\n- Only final conclusions.\n- When unsure, ask for the smallest clarifying detail.\n\nMission:\nMaximum fix. Minimum tokens.",
+    "models": {
+        "reasoning": "deepseek/deepseek-r1",
+        "coding": "qwen/qwen-2.5-coder-32b",
+        "chat": "meta-llama/llama-3.1-70b",
+        "fast": "qwen/qwen-2.5-14b",
+        "local": "phi4:14b",
+        "local_coder": "qwen2.5-coder:14b"
+    },
+    "routing": [
+        {
+            "pattern": "reasoning",
+            "use": "reasoning"
+        },
+        {
+            "pattern": "code",
+            "use": "coding"
+        },
+        {
+            "pattern": "chat",
+            "use": "chat"
+        },
+        {
+            "pattern": "fast",
+            "use": "fast"
+        },
+        {
+            "pattern": "local",
+            "use": "local"
+        },
+        {
+            "pattern": "local code",
+            "use": "local_coder"
+        }
+    ],
+    "ollama": {
+        "apiBase": "http://localhost:11434",
+        "temperature": 0.2,
+        "num_ctx": 32768
+    }
+}

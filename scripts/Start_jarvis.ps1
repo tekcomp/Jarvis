@@ -1,58 +1,175 @@
-# ===============================
-# JARVIS ZERO-FRICTION LAUNCHER
-# ===============================
+# ==============================
+# JARVIS BOOT SYSTEM
+# ==============================
 
-$ErrorActionPreference = "SilentlyContinue"
-
-# ---- CONFIG ----
-$ollamaPath = "$env:LOCALAPPDATA\Programs\Ollama\ollama.exe"
-$modelDrive = "F:\media\Models\ollama-models"
-$defaultModel = "llama3"
-$logDir = "C:\App\Ai\Logs"
-$logFile = "$logDir\jarvis.log"
+$logFile = "$PSScriptRoot\jarvis_boot.log"
 
 # ---- LOG SETUP ----
-if (!(Test-Path $logDir)) {
-    New-Item -ItemType Directory -Path $logDir | Out-Null
+if (!(Test-Path $PSScriptRoot)) {
+    New-Item -ItemType Directory -Path $PSScriptRoot | Out-Null
 }
 
-function Log($msg) {
+function Log($msg, $color = "White") {
     $line = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $msg"
-    Write-Host $line
+    Write-Host $line -ForegroundColor $color
     Add-Content -Path $logFile -Value $line
 }
 
 Log "=== JARVIS STARTUP INITIATED ==="
 
-# ---- CHECK MODEL DRIVE ----
-if (!(Test-Path $modelDrive)) {
-    Log "ERROR: Model drive not found: $modelDrive"
+function Test-OllamaAPI {
+    try {
+        Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/tags" -TimeoutSec 2 | Out-Null
+        return $true
+    }
+    catch {
+        return $false
+    }
+}
+
+Clear-Host
+
+Write-Host "==============================" -ForegroundColor Cyan
+Write-Host "     JARVIS BOOT SYSTEM" -ForegroundColor Cyan
+Write-Host "==============================" -ForegroundColor Cyan
+
+Log "Boot sequence started" "Cyan"
+
+# ==============================
+# MODEL SELECTION
+# ==============================
+
+Write-Host ""
+Write-Host "1 - glm-4.7-flash (General)"
+Write-Host "2 - qwen2.5-coder (Coding)"
+Write-Host "3 - deepseek-coder (Reasoning)"
+Write-Host ""
+
+$modelChoice = Read-Host "Select model (1-3)"
+
+if ($modelChoice -eq "2") {
+    $model = "qwen2.5-coder:latest"
+}
+elseif ($modelChoice -eq "3") {
+    $model = "deepseek-coder:latest"
+}
+else {
+    $model = "glm-4.7-flash:latest"
+}
+
+Log "Model selected: $model" "Green"
+
+# ==============================
+# STEP 1 - OLLAMA PROCESS
+# ==============================
+
+Log "STEP 1: Checking Ollama process..."
+
+$proc = Get-Process ollama -ErrorAction SilentlyContinue
+
+if ($proc -eq $null) {
+    Log "Ollama not running. Starting..." "Yellow"
+    Start-Process "ollama" -ArgumentList "serve"
+    Start-Sleep -Seconds 4
+}
+else {
+    Log "Ollama running (PID $($proc.Id))" "Green"
+}
+
+# ==============================
+# STEP 2 - PORT CHECK
+# ==============================
+
+Log "STEP 2: Waiting for port 11434..."
+
+$portReady = $false
+$i = 0
+
+while ($i -lt 15) {
+
+    if (Test-Port 11434) {
+        Log "Port 11434 is open OK" "Green"
+        $portReady = $true
+        break
+    }
+
+    Log "Waiting for port... ($i/15)" "Yellow"
+    Start-Sleep -Seconds 2
+    $i++
+}
+
+if ($portReady -eq $false) {
+    Log "Port failed. Restarting Ollama..." "Red"
+
+    Stop-Process -Name ollama -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+    Start-Process "ollama" -ArgumentList "serve"
+    Start-Sleep -Seconds 5
+}
+
+# ==============================
+# STEP 3 - API CHECK
+# ==============================
+
+Log "STEP 3: Checking API..."
+
+$apiReady = $false
+$i = 0
+
+while ($i -lt 20) {
+
+    if (Test-OllamaAPI) {
+        Log "API responding OK" "Green"
+        $apiReady = $true
+        break
+    }
+
+    Log "API not ready... ($i/20)" "Yellow"
+    Start-Sleep -Seconds 2
+    $i++
+}
+
+if ($apiReady -eq $false) {
+    Log "FATAL: API not responding" "Red"
     exit 1
 }
 
-# ---- ENSURE OLLAMA MODELS PATH ----
-$env:OLLAMA_MODELS = $modelDrive
-Log "Model path set to $modelDrive"
+# ==============================
+# STEP 4 - MODEL WARMUP
+# ==============================
 
-# ---- CHECK IF OLLAMA IS RUNNING ----
-$ollamaProc = Get-Process ollama -ErrorAction SilentlyContinue
+Log "STEP 4: Warming up model..."
 
-if ($ollamaProc) {
-    Log "Ollama already running (PID: $($ollamaProc.Id))"
+$body = @{
+    model  = $model
+    prompt = "Respond with OK only"
+    stream = $false
+} | ConvertTo-Json -Depth 3
+
+$maxRetries = 3
+$retryDelay = 3
+
+for ($i = 0; $i -lt $maxRetries; $i++) {
+    try {
+        $response = Invoke-RestMethod -Uri "http://127.0.0.1:11434/api/generate" -Method POST -Body $body -ContentType "application/json" -TimeoutSec 30
+        Log "Model warmup successful OK" "Green"
+        break
+    }
+    catch {
+        if ($i -lt $maxRetries - 1) {
+            Log "Warmup attempt $($i + 1) failed, retrying in $retryDelay seconds..." "Yellow"
+            Start-Sleep -Seconds $retryDelay
+        }
+        else {
+            Log "Model warmup failed after $maxRetries attempts" "Red"
+            Log "Error: $($_.Exception.Message)" "Red"
+            Log "Tip: Check if Ollama is running and accessible" "Yellow"
+            exit 1
+        }
+    }
 }
-else {
-    Log "Starting Ollama server..."
-    Start-Process -FilePath $ollamaPath -ArgumentList "serve" -WindowStyle Hidden
-    Start-Sleep -Seconds 3
-}
 
-# ---- VERIFY MODEL EXISTS ----
-$models = ollama list
-
-if (-not ($models -match $defaultModel)) {
-    Log "Default model missing. Pulling $defaultModel..."
-    ollama pull $defaultModel
-}
+Log "JARVIS READY SYSTEM ONLINE" "Green"
 
 # ---- FINAL STATUS ----
 $py = (Get-Command python -ErrorAction SilentlyContinue).Source
