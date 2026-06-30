@@ -50,18 +50,26 @@ def _tts_worker():
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as f:
                 path = f.name
 
-            loop.run_until_complete(_generate_audio(text, path))
+            try:
+                loop.run_until_complete(_generate_audio(text, path))
 
-            # play audio (blocking but inside worker only)
-            pygame.mixer.music.load(path)
-            pygame.mixer.music.play()
+                # play audio (blocking but inside worker only)
+                pygame.mixer.music.load(path)
+                pygame.mixer.music.play()
 
-            while pygame.mixer.music.get_busy():
-                continue
+                while pygame.mixer.music.get_busy():
+                    continue
 
-            os.remove(path)
-
-            print("[TTS DONE]")
+                print("[TTS DONE]")
+            finally:
+                # Windows holds the file handle after playback ends;
+                # defer cleanup so the next utterance can't collide.
+                def _cleanup(p):
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
+                threading.Timer(0.5, _cleanup, args=[path]).start()
 
         except Exception as e:
             print(f"[TTS ERROR] {e}")

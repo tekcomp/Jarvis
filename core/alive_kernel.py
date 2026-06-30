@@ -321,21 +321,81 @@ def start_kernel():
     print("[SYSTEM] AGENT v3 BOOT")
     print("[SYSTEM] AUDIO GATE ENABLED")
 
+    # ---- PID marker so Kill_Jarvis can stop us cleanly ----
+    try:
+        import os
+        pid_path = os.path.join(os.path.dirname(__file__), "..", "state", "kernel.pid")
+        os.makedirs(os.path.dirname(pid_path), exist_ok=True)
+        with open(pid_path, "w") as f:
+            f.write(str(os.getpid()))
+        print(f"[SYSTEM] pid marker: {os.path.abspath(pid_path)}")
+    except Exception as e:
+        print(f"[SYSTEM] pid marker failed (non-fatal): {e}")
+
     threading.Thread(target=vad_loop, daemon=True).start()
     threading.Thread(target=tts_worker, daemon=True).start()
     start_tts_engine()
+
+    # ---- Startup chime: confirms audio path is alive ----
+    print("[SYSTEM] boot chime queued")
+    tts_queue.put("System online.")
+
+    # ---- Shutdown announcement (graceful) ----
+    def _announce_and_quit(_signum=None, _frame=None):
+        try:
+            print("[SYSTEM] shutdown signal received, announcing...")
+            tts_queue.put("System shutting down.")
+            # let TTS worker pick it up
+            tts_queue.join()
+        except Exception as e:
+            print(f"[SYSTEM] announce error: {e}")
+        finally:
+            trigger_shutdown("signal")
+            try:
+                import os
+                # raise from main thread so asyncio.run returns
+                os._exit(0)
+            except Exception:
+                pass
+
+    # Wire SIGTERM (sent by Kill_Jarvis) and SIGINT (Ctrl+C)
+    try:
+        import signal as _signal
+        _signal.signal(_signal.SIGTERM, _announce_and_quit)
+        _signal.signal(_signal.SIGINT, _announce_and_quit)
+    except Exception as e:
+        # Windows may not expose SIGTERM to all Python builds; fall through to KeyboardInterrupt path
+        print(f"[SYSTEM] signal handler install skipped: {e}")
 
     try:
         asyncio.run(cognitive_loop())
 
     except KeyboardInterrupt:
+        # Ctrl+C path: announce then exit
+        try:
+            tts_queue.put("System shutting down.")
+            tts_queue.join()
+        except Exception:
+            pass
         trigger_shutdown("keyboard")
 
     finally:
         trigger_shutdown("exit")
 
         audio_queue.put(None)
-        tts_queue.put(None)
+        try:
+            tts_queue.put(None)
+        except Exception:
+            pass
+
+        # remove pid marker
+        try:
+            import os
+            pid_path = os.path.join(os.path.dirname(__file__), "..", "state", "kernel.pid")
+            if os.path.exists(pid_path):
+                os.remove(pid_path)
+        except Exception:
+            pass
 
         fsm.stop_tts()
 

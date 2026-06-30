@@ -1,5 +1,5 @@
 {
-    "systemPrompt": "You are Cline. Use local models for fast tasks and OpenRouter models for heavy reasoning and coding.",
+    "systemPrompt": "You are Cline. Use local models for fast tasks and OpenRouter models for heavy reasoning and coding.You must respond ONLY in English. Never use Chinese or any other language. If the user writes in another language, translate it and reply in English.",
     "routing": {
         "enable": true,
         "rules": [
@@ -39,6 +39,18 @@
                     "no internet"
                 ],
                 "use": "phi4:14b"
+            },
+            {
+                "match": [
+                    "code",
+                    "powershell",
+                    "python",
+                    "explain",
+                    "review",
+                    "analyze"
+                ],
+                "use": "coding",
+                "systemPrompt": "Respond ONLY in English. All explanations, comments, and messages must be in English."
             }
         ]
     },

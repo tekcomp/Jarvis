@@ -55,7 +55,15 @@ if (-not ($models -match $defaultModel)) {
 }
 
 # ---- FINAL STATUS ----
-Log "Launching Jarvis chat with $defaultModel"
+$py = (Get-Command python -ErrorAction SilentlyContinue).Source
+if (-not $py) {
+    Log "ERROR: 'python' not found on PATH"
+    exit 1
+}
+Log "Python: $py"
 
-# ---- START CHAT ----
-ollama run $defaultModel
+# ---- START AUDIO KERNEL ----
+Log "Launching Jarvis AUDIO agent (alive_kernel)"
+Set-Location "C:\App\AI"
+& python -c "from core.alive_kernel import start_kernel; start_kernel()"
+exit $LASTEXITCODE
