@@ -413,6 +413,41 @@ def start_kernel():
     print("[SYSTEM] boot chime queued")
     tts_queue.put("System online.")
 
+    # ---- Heartbeat logger: write a 1-line "still alive" ping every 30s
+    # to logs/heartbeat.log so silence in the main log is distinguishable
+    # from a dead process.
+    import os as _hb_os
+    _hb_path = _hb_os.path.join(_hb_os.path.dirname(__file__), "..", "logs", "heartbeat.log")
+    try:
+        _hb_os.makedirs(_hb_os.path.dirname(_hb_path), exist_ok=True)
+        # Write a session-start banner so each run is visibly demarcated.
+        try:
+            with open(_hb_path, "a", encoding="utf-8") as _bf:
+                _bf.write(
+                    f"[{datetime.datetime.now().isoformat(timespec='seconds')}] "
+                    f"=== SESSION START pid={_hb_os.getpid()} ===\n"
+                )
+        except Exception:
+            pass
+        def _heartbeat():
+            _start = time.time()
+            while not is_shutdown():
+                try:
+                    with open(_hb_path, "a", encoding="utf-8") as _f:
+                        _f.write(
+                            f"[{datetime.datetime.now().isoformat(timespec='seconds')}] "
+                            f"alive uptime={int(time.time()-_start)}s "
+                            f"mic_allowed={audio_state.mic_allowed()} "
+                            f"session_active={session_active()}\n"
+                        )
+                except Exception:
+                    pass
+                time.sleep(30)
+        threading.Thread(target=_heartbeat, daemon=True).start()
+        print(f"[SYSTEM] heartbeat -> {_hb_os.path.abspath(_hb_path)}")
+    except Exception as e:
+        print(f"[SYSTEM] heartbeat start failed (non-fatal): {e}")
+
     # ---- Shutdown announcement (graceful) ----
     def _announce_and_quit(_signum=None, _frame=None):
         try:
