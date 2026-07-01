@@ -166,6 +166,39 @@ def test_version_does_not_shadow_mode_switch():
     return ok
 
 
+def test_memory_intent_empty():
+    print("test_memory_intent_empty:")
+    brain.reset_memory()
+    cases = [
+        "jarvis memory",
+        "jarvis what do you remember",
+        "jarvis what did I say",
+        "jarvis what's in your memory",
+    ]
+    ok = True
+    for q in cases:
+        out = brain.route_intent(q) or ""
+        cond = "don't have anything" in out.lower() or "no" in out.lower()
+        mark = "PASS" if cond else "FAIL"
+        print(f"  [{mark}] route_intent({q!r:42s}) -> {out[:80]}")
+        ok &= cond
+    return ok
+
+
+def test_memory_intent_after_conversation():
+    print("test_memory_intent_after_conversation:")
+    brain.reset_memory()
+    # Drive two turns through stream_response so memory gets populated.
+    _ = "".join(brain.stream_response("jarvis my favorite color is teal"))
+    _ = "".join(brain.stream_response("jarvis what time is it"))
+    out = brain.route_intent("jarvis what do you remember") or ""
+    cond = "in memory" in out.lower() and ("teal" in out.lower() or "time" in out.lower())
+    mark = "PASS" if cond else "FAIL"
+    short = out if len(out) <= 110 else out[:107] + "..."
+    print(f"  [{mark}] {short}")
+    return cond
+
+
 def run_canned_responses_tests() -> dict:
     print("\n[CI] CANNED RESPONSES TESTS")
     results = [
@@ -179,6 +212,8 @@ def run_canned_responses_tests() -> dict:
         test_missing_key_falls_back(),
         test_version_intent(),
         test_version_does_not_shadow_mode_switch(),
+        test_memory_intent_empty(),
+        test_memory_intent_after_conversation(),
     ]
     passed = sum(1 for r in results if r)
     failed = sum(1 for r in results if not r)

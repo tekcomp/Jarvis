@@ -40,6 +40,8 @@ TESTS = [
     ("jarvis mode", "mode"),
     ("jarvis version", "version"),
     ("jarvis status", "version"),
+    ("jarvis memory", "memory"),
+    ("jarvis what do you remember", "memory"),
 ]
 
 
@@ -64,6 +66,9 @@ def classify(output) -> str:
     # Version / self-report: contains "model" + "kernel pid" signature.
     if "model" in o and "kernel pid" in o:
         return "version"
+    # Memory / self-report: contains "in memory" or "don't have anything".
+    if "in memory" in o or "don't have anything" in o or "do not have anything" in o:
+        return "memory"
     # Mode: explicit "switched to X mode" / "X mode activated" / bare hint.
     if "switched to" in o or "activated" in o or "current mode is" in o:
         return "mode"
