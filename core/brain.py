@@ -121,8 +121,12 @@ def reset_memory() -> None:
 # The kernel passes personality.system_prompt() in via the `system_prompt`
 # argument. We hit the same Ollama endpoint the boot script verified, stream
 # tokens, and yield them as they arrive so TTS can speak progressively.
+#
+# Default model: qwen2.5:14b (8.9 GB) — better reasoning than gemma3:2b
+# for hard questions, and we know it's installed. Override with the
+# JARVIS_OLLAMA_MODEL env var if you want a different one.
 _OLLAMA_URL = os.environ.get("JARVIS_OLLAMA_URL", "http://127.0.0.1:11434")
-_OLLAMA_MODEL = os.environ.get("JARVIS_OLLAMA_MODEL", "gemma3:latest")
+_OLLAMA_MODEL = os.environ.get("JARVIS_OLLAMA_MODEL", "qwen2.5:14b")
 _OLLAMA_TIMEOUT = float(os.environ.get("JARVIS_OLLAMA_TIMEOUT", "30"))
 
 
@@ -195,6 +199,12 @@ def route_intent(text: str):
     if "assistant mode" in t:
         engine.mode = "assistant"
         return "Switched to assistant mode."
+
+    # Edge case: wake-stripper may have left bare mode-switch tokens like
+    # "mode" or "playful". Catch the most common ones before falling through
+    # to the LLM so we don't get a confused conversational response.
+    if t.strip() in ("mode", "modes", "switch mode", "switch modes"):
+        return f"Current mode is {engine.mode}. Try 'playful mode', 'jarvis mode', or 'assistant mode'."
 
     # -------------------------
     # HOLIDAYS
