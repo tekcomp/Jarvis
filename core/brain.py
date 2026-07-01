@@ -4,9 +4,74 @@ from core.holiday_engine import get_holidays
 import os
 import re
 import json
+import random
 import requests
 
 engine = get_engine()
+
+# =========================================================
+# JOKE BANKS (loaded from data/jokes.json)
+# =========================================================
+# Six banks keyed by generation / style:
+#   jarvis    - dry/sardonic, AI-self-aware
+#   genx      - cassettes, dial-up, MTV, irony
+#   millennial - avocado toast, therapy-speak, irony
+#   boomer    - rotary phones, three TV channels, "in my day"
+#   genz      - TikTok, vibes, parasocial, "I cannot even"
+#   dad       - pun-based, groan-worthy, all-ages
+#
+# Jokes live in data/jokes.json so non-coders can edit them without
+# touching Python. If the file is missing or malformed, we fall back to
+# a minimal in-memory list so Jarvis still has at least one joke.
+_JOKES_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "jokes.json"
+)
+
+
+def _load_joke_banks() -> dict:
+    try:
+        with open(_JOKES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # Ensure every key exists; default to an empty list if missing.
+        for key in ("jarvis", "genx", "millennial", "boomer", "genz", "dad"):
+            data.setdefault(key, [])
+        return data
+    except Exception as e:
+        print(f"[CI-JOKES] failed to load {_JOKES_PATH}: {e}")
+        return {
+            "jarvis": ["I tried to load jokes, but my filing cabinet is on fire."],
+            "genx": ["I tried to load jokes, but my filing cabinet is on fire."],
+            "millennial": ["I tried to load jokes, but my filing cabinet is on fire."],
+            "boomer": ["I tried to load jokes, but my filing cabinet is on fire."],
+            "genz": ["I tried to load jokes, but my filing cabinet is on fire."],
+            "dad": ["I tried to load jokes, but my filing cabinet is on fire."],
+        }
+
+
+_JOKES = _load_joke_banks()
+
+# Convenience module-level handles used by the rotation logic.
+_JARVIS_JOKES = _JOKES["jarvis"]
+_GENX_JOKES = _JOKES["genx"]
+_MILLENNIAL_JOKES = _JOKES["millennial"]
+_BOOMER_JOKES = _JOKES["boomer"]
+_GENZ_JOKES = _JOKES["genz"]
+_DAD_JOKES = _JOKES["dad"]
+
+# Combined "all" pool used by the default / jarvis / assistant modes.
+_ALL_JOKES = (
+    _JARVIS_JOKES
+    + _GENX_JOKES
+    + _MILLENNIAL_JOKES
+    + _BOOMER_JOKES
+    + _GENZ_JOKES
+    + _DAD_JOKES
+)
+
+# Lighter mix for playful mode - lean into Gen X / Millennial / Gen Z / dad.
+_PLAYFUL_JOKES = (
+    _GENX_JOKES + _MILLENNIAL_JOKES + _GENZ_JOKES + _DAD_JOKES + _JARVIS_JOKES[:1]
+)
 
 # =========================================================
 # CONVERSATION MEMORY
@@ -192,8 +257,8 @@ def route_intent(text: str):
 
     if re.search(r"\bjoke\b", t):
         if engine.mode == "playful":
-            return "😄 Why did the AI cross the road? For fun!"
-        return "Why did the AI cross the road? To optimize the reward function."
+            return random.choice(_PLAYFUL_JOKES) if _PLAYFUL_JOKES else "I've got nothing. Try again."
+        return random.choice(_ALL_JOKES) if _ALL_JOKES else "I've got nothing. Try again."
 
 
 def stream_response(text: str, system_prompt=None, context=None):
