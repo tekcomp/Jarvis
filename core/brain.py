@@ -50,6 +50,45 @@ def _load_joke_banks() -> dict:
 
 _JOKES = _load_joke_banks()
 
+# =========================================================
+# CANNED RESPONSES (loaded from data/canned_responses.json)
+# =========================================================
+# Static canned lines for mode-switch, goodbye, LLM-unreachable, etc.
+# The holiday engine already loads its own data; this is for everything
+# else that's hard-coded English. Templates use {placeholders}.
+_CANNED_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "canned_responses.json"
+)
+
+
+def _load_canned_responses() -> dict:
+    try:
+        with open(_CANNED_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"[CI-CANNED] failed to load {_CANNED_PATH}: {e}")
+        return {}
+
+
+_CANNED = _load_canned_responses()
+
+
+def _canned(key: str, default: str = "") -> str:
+    """Look up a top-level canned string. Returns the supplied default if missing."""
+    if not _CANNED:
+        return default
+    return _CANNED.get(key, default)
+
+
+def _canned_nested(table: str, key: str, default: str = "") -> str:
+    """Look up a string nested one level deep (e.g. _canned_nested('goodbye', 'playful'))."""
+    if not _CANNED:
+        return default
+    sub = _CANNED.get(table, {})
+    if isinstance(sub, dict):
+        return sub.get(key, default)
+    return default
+
 # Convenience module-level handles used by the rotation logic.
 _JARVIS_JOKES = _JOKES["jarvis"]
 _GENX_JOKES = _JOKES["genx"]
@@ -122,11 +161,15 @@ def reset_memory() -> None:
 # argument. We hit the same Ollama endpoint the boot script verified, stream
 # tokens, and yield them as they arrive so TTS can speak progressively.
 #
-# Default model: qwen2.5:14b (8.9 GB) — better reasoning than gemma3:2b
-# for hard questions, and we know it's installed. Override with the
-# JARVIS_OLLAMA_MODEL env var if you want a different one.
+# Default model: qwen2.5-coder:14b (8.9 GB) — installed locally, strong on
+# reasoning and code. We default to this rather than gemma3:latest (3.3 GB)
+# because gemma3 is the smallest installed model and hallucinates more
+# often. Override with the JARVIS_OLLAMA_MODEL env var.
+#
+# Verified-installed models: gemma3:latest, qwen2.5-coder:14b, phi4:14b,
+# glm-4.7-flash:latest, llama3:latest, phi3.5:latest.
 _OLLAMA_URL = os.environ.get("JARVIS_OLLAMA_URL", "http://127.0.0.1:11434")
-_OLLAMA_MODEL = os.environ.get("JARVIS_OLLAMA_MODEL", "qwen2.5:14b")
+_OLLAMA_MODEL = os.environ.get("JARVIS_OLLAMA_MODEL", "qwen2.5-coder:14b")
 _OLLAMA_TIMEOUT = float(os.environ.get("JARVIS_OLLAMA_TIMEOUT", "30"))
 
 
@@ -180,31 +223,35 @@ def route_intent(text: str):
     # -------------------------
     # MODE SWITCH
     # -------------------------
+    # Order matters: check the more specific phrases first, otherwise
+    # the bare "jarvis" / "assistant" substring rules above will match
+    # before the "jarvis mode" / "assistant mode" rules get a chance.
     if "playful mode" in t:
         engine.mode = "playful"
-        return "Switched to playful mode."
-
-    if "jarvis" in t:
-        engine.mode = "jarvis"
-        return "Jarvis mode activated."
+        return _canned_nested("mode_switch", "playful", "Switched to playful mode.")
 
     if "jarvis mode" in t:
         engine.mode = "jarvis"
-        return "Switched to jarvis mode."
-
-    if "assistant" in t:
-        engine.mode = "assistant"
-        return "Assistant mode activated."
+        return _canned_nested("mode_switch", "jarvis_explicit", "Switched to jarvis mode.")
 
     if "assistant mode" in t:
         engine.mode = "assistant"
-        return "Switched to assistant mode."
+        return _canned_nested("mode_switch", "assistant_explicit", "Switched to assistant mode.")
+
+    if "jarvis" in t:
+        engine.mode = "jarvis"
+        return _canned_nested("mode_switch", "jarvis_substring", "Jarvis mode activated.")
+
+    if "assistant" in t:
+        engine.mode = "assistant"
+        return _canned_nested("mode_switch", "assistant_substring", "Assistant mode activated.")
 
     # Edge case: wake-stripper may have left bare mode-switch tokens like
     # "mode" or "playful". Catch the most common ones before falling through
     # to the LLM so we don't get a confused conversational response.
     if t.strip() in ("mode", "modes", "switch mode", "switch modes"):
-        return f"Current mode is {engine.mode}. Try 'playful mode', 'jarvis mode', or 'assistant mode'."
+        hint_tpl = _canned("bare_mode_hint", "Current mode is {mode}.")
+        return hint_tpl.format(mode=engine.mode)
 
     # -------------------------
     # HOLIDAYS
@@ -247,23 +294,26 @@ def route_intent(text: str):
         return get_holidays("december")
 
     if "bye" in t:
-        if engine.mode == "playful":
-            return "Haha 😄 See you next time!"
-        elif engine.mode == "assistant":
-            return "Goodbye! Let me know if you need anything else."
-        else:
-            return "Goodbye!"
+        mode = engine.mode
+        return _canned_nested(
+            "goodbye",
+            mode if mode in ("playful", "assistant") else "default",
+            "Goodbye!",
+        )
 
     # Word-boundary checks below: avoid "times" -> "time" and "byebye" -> "bye"
     # style substring collisions. Holidays stay as substring matches because
     # the words ("june", "july", etc.) are very rarely substrings of other
     # common words, and tightening them would break "what's in june" style.
     if re.search(r"\btime\b", t):
-        import time
-        return f"The current time is {time.strftime('%H:%M:%S')}."
+        import time as _time
+        tpl = _canned("time_template", "The current time is {time}.")
+        return tpl.format(time=_time.strftime("%H:%M:%S"))
 
     if re.search(r"\b(date|today)\b", t):
-        return "Today is Sunday, June 21, 2026."
+        import datetime as _dt
+        tpl = _canned("date_template", "Today is {date}.")
+        return tpl.format(date=_dt.date.today().strftime("%A, %B %d, %Y"))
 
     if re.search(r"\bjoke\b", t):
         if engine.mode == "playful":
@@ -318,11 +368,7 @@ def stream_response(text: str, system_prompt=None, context=None):
         # LLM produced nothing — fall back to a mode-aware canned line and
         # record it so subsequent turns have something to reference.
         mode = engine.mode
-        if mode == "playful":
-            fb = "I'm having trouble reaching my brain right now, but I'm still here!"
-        elif mode == "assistant":
-            fb = "I'm sorry, I couldn't reach the language model. Please try again."
-        else:
-            fb = "My language model is unreachable at the moment, sir."
+        key = mode if mode in ("playful", "assistant") else "default"
+        fb = _canned_nested("llm_unreachable", key, "My language model is unreachable.")
         _mem_push("assistant", fb)
         yield fb

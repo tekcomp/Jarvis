@@ -8,6 +8,9 @@ from tests.test_brain import run_brain_tests
 from tests.test_pipeline_mock import run_pipeline_tests
 from tests.test_wake_stream import run_wake_tests
 from tests.test_interrupt import run_interrupt_test
+from tests.test_wake_and_mode import run_wake_and_mode_tests
+from tests.test_llm_backend import run_llm_backend_tests
+from tests.test_canned_responses import run_canned_responses_tests
 from tests.ci_dashboard import CIDashboard
 from core.contract import handle, reset
 
@@ -15,10 +18,13 @@ from core.contract import handle, reset
 # WEIGHTS (CI CONTRACT)
 # =========================================================
 WEIGHTS = {
-    "brain": 40,
-    "pipeline": 20,
-    "wake": 15,
-    "interrupt": 25,
+    "brain": 35,
+    "pipeline": 15,
+    "wake": 10,
+    "interrupt": 20,
+    "wake_and_mode": 5,
+    "llm_backend": 10,
+    "canned_responses": 5,
 }
 
 
@@ -75,6 +81,15 @@ def main():
     i = safe_run(run_interrupt_test, "interrupt")
     dash.add("interrupt", i["passed"], i["failed"], weight=WEIGHTS["interrupt"])
 
+    wm = safe_run(run_wake_and_mode_tests, "wake_and_mode")
+    dash.add("wake_and_mode", wm["passed"], wm["failed"], weight=WEIGHTS["wake_and_mode"])
+
+    llm = safe_run(run_llm_backend_tests, "llm_backend")
+    dash.add("llm_backend", llm["passed"], llm["failed"], weight=WEIGHTS["llm_backend"])
+
+    canned = safe_run(run_canned_responses_tests, "canned_responses")
+    dash.add("canned_responses", canned["passed"], canned["failed"], weight=WEIGHTS["canned_responses"])
+
     # -------------------------
     # SYSTEM METRICS (PLACEHOLDERS FOR NOW)
     # -------------------------
@@ -98,7 +113,17 @@ def main():
 def run_ci_tests() -> bool:
     """
     Returns True if ALL tests pass.
+
+    Runs every suite in WEIGHTS (brain, pipeline, wake, interrupt,
+    wake_and_mode, llm_backend, canned_responses). Each suite is
+    short-circuited: if any individual suite reports a failure, the
+    full run returns False immediately.
     """
+
+    print("[CI] brain tests...")
+    r = run_brain_tests()
+    if r["failed"]:
+        return False
 
     print("[CI] pipeline tests...")
     if not run_pipeline_tests():
@@ -109,7 +134,23 @@ def run_ci_tests() -> bool:
         return False
 
     print("[CI] interrupt tests...")
-    if not run_interrupt_test():
+    r = run_interrupt_test()
+    if r["failed"]:
+        return False
+
+    print("[CI] wake_and_mode tests...")
+    r = run_wake_and_mode_tests()
+    if r["failed"]:
+        return False
+
+    print("[CI] llm_backend tests...")
+    r = run_llm_backend_tests()
+    if r["failed"]:
+        return False
+
+    print("[CI] canned_responses tests...")
+    r = run_canned_responses_tests()
+    if r["failed"]:
         return False
 
     return True

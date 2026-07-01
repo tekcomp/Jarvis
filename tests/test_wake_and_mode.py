@@ -94,6 +94,20 @@ def test_word_boundary_holds():
     return ok
 
 
+def run_wake_and_mode_tests() -> dict:
+    """CI entry point: returns {"passed": N, "failed": M}."""
+    results = [
+        test_wake_strip(),
+        test_contains_wake(),
+        test_bare_mode_intent(),
+        test_word_boundary_holds(),
+    ]
+    passed = sum(1 for r in results if r)
+    failed = sum(1 for r in results if not r)
+    print(f"wake_and_mode: {passed} passed / {failed} failed")
+    return {"passed": passed, "failed": failed}
+
+
 def main():
     results = [
         test_wake_strip(),
