@@ -84,14 +84,7 @@ class PersonalityEngineV2:
     def reset(self):
         self.state = PersonalityState()
         self.history.clear()
-    
-    # REQUIRED FOR CI COMPATIBILITY
-    def get_engine():
-        global _ENGINE_SINGLETON
-        if _ENGINE_SINGLETON is None:
-            _ENGINE_SINGLETON = PersonalityEngineV2()
-        return _ENGINE_SINGLETON
-    
+
     def system_prompt(self):
         base = "You are Jarvis."
 
