@@ -122,6 +122,50 @@ def test_missing_key_falls_back():
         brain._CANNED = saved
 
 
+def test_version_intent():
+    print("test_version_intent:")
+    cases = [
+        "jarvis version",
+        "jarvis status",
+        "jarvis who are you",
+        "jarvis what are you running on",
+        "jarvis diagnostics",
+        "version",
+        "status",
+    ]
+    ok = True
+    for q in cases:
+        out = brain.route_intent(q) or ""
+        # Must mention model, joke count, and kernel PID.
+        checks = [
+            ("Jarvis" in out, "mentions Jarvis"),
+            (brain._OLLAMA_MODEL in out, f"mentions model {brain._OLLAMA_MODEL}"),
+            ("jokes loaded" in out, "mentions joke count"),
+            ("canned response categories" in out, "mentions canned-response count"),
+            ("kernel PID" in out, "mentions PID"),
+        ]
+        all_ok = all(c[0] for c in checks)
+        mark = "PASS" if all_ok else "FAIL"
+        first_fail = next((c[1] for c in checks if not c[0]), None)
+        suffix = "" if all_ok else f" (missing: {first_fail})"
+        print(f"  [{mark}] route_intent({q!r:42s}){suffix}")
+        ok &= all_ok
+    return ok
+
+
+def test_version_does_not_shadow_mode_switch():
+    print("test_version_does_not_shadow_mode_switch:")
+    # Bare "jarvis" should still activate jarvis mode, NOT return the
+    # version report. This guards against the version regex swallowing
+    # the substring mode-switch path.
+    engine = get_engine()
+    engine.mode = "assistant"
+    out = brain.route_intent("jarvis")
+    ok = out == "Jarvis mode activated." and engine.mode == "jarvis"
+    print(f"  [{'PASS' if ok else 'FAIL'}] bare 'jarvis' still triggers mode switch")
+    return ok
+
+
 def run_canned_responses_tests() -> dict:
     print("\n[CI] CANNED RESPONSES TESTS")
     results = [
@@ -133,6 +177,8 @@ def run_canned_responses_tests() -> dict:
         test_time_template(),
         test_date_template_uses_today(),
         test_missing_key_falls_back(),
+        test_version_intent(),
+        test_version_does_not_shadow_mode_switch(),
     ]
     passed = sum(1 for r in results if r)
     failed = sum(1 for r in results if not r)

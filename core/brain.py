@@ -155,6 +155,39 @@ def reset_memory() -> None:
 
 
 # =========================================================
+# VERSION / DIAGNOSTICS
+# =========================================================
+def get_version() -> str:
+    """Return a short, voice-friendly status string for the user.
+
+    Includes: model name, joke-bank size, canned-response key count,
+    current mode, and the kernel's own PID (if we can find one).
+    """
+    try:
+        joke_total = len(_ALL_JOKES)
+    except Exception:
+        joke_total = 0
+    try:
+        canned_keys = len(_CANNED) if isinstance(_CANNED, dict) else 0
+    except Exception:
+        canned_keys = 0
+    pid = "unknown"
+    try:
+        import os as _os
+        pid = str(_os.getpid())
+    except Exception:
+        pass
+    return (
+        f"Jenkins, that's me, actually Jarvis. "
+        f"Model {_OLLAMA_MODEL}, "
+        f"{joke_total} jokes loaded, "
+        f"{canned_keys} canned response categories, "
+        f"current mode {engine.mode}, "
+        f"kernel PID {pid}."
+    ).replace("Jenkins", "Jarvis")  # safety in case of a future name regression
+
+
+# =========================================================
 # LLM BACKEND (real Ollama call)
 # =========================================================
 # The kernel passes personality.system_prompt() in via the `system_prompt`
@@ -238,13 +271,20 @@ def route_intent(text: str):
         engine.mode = "assistant"
         return _canned_nested("mode_switch", "assistant_explicit", "Switched to assistant mode.")
 
-    if "jarvis" in t:
-        engine.mode = "jarvis"
-        return _canned_nested("mode_switch", "jarvis_substring", "Jarvis mode activated.")
-
     if "assistant" in t:
         engine.mode = "assistant"
         return _canned_nested("mode_switch", "assistant_substring", "Assistant mode activated.")
+
+    # Self-report: caller asked for runtime info. Run this BEFORE the bare
+    # "jarvis" substring rule below, otherwise "jarvis version" / "jarvis
+    # status" / "jarvis who are you" would get short-circuited into the
+    # "Jarvis mode activated." reply and never reach the version intent.
+    if re.search(r"\b(version|status|about you|who are you|what are you running on|diagnostics)\b", t):
+        return get_version()
+
+    if "jarvis" in t:
+        engine.mode = "jarvis"
+        return _canned_nested("mode_switch", "jarvis_substring", "Jarvis mode activated.")
 
     # Edge case: wake-stripper may have left bare mode-switch tokens like
     # "mode" or "playful". Catch the most common ones before falling through

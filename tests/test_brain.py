@@ -38,6 +38,8 @@ TESTS = [
     ("random nonsense", "none"),          # no canned match -> None
     ("playful mode", "mode"),
     ("jarvis mode", "mode"),
+    ("jarvis version", "version"),
+    ("jarvis status", "version"),
 ]
 
 
@@ -59,6 +61,9 @@ def classify(output) -> str:
         return "time"
     if "today is" in o:
         return "date"
+    # Version / self-report: contains "model" + "kernel pid" signature.
+    if "model" in o and "kernel pid" in o:
+        return "version"
     # Mode: explicit "switched to X mode" / "X mode activated" / bare hint.
     if "switched to" in o or "activated" in o or "current mode is" in o:
         return "mode"
