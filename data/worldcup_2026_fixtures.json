@@ -1,0 +1,24 @@
+{
+    "name": "FIFA World Cup 2026 Fixtures",
+    "description": "All 104 fixtures of the 2026 FIFA World Cup...",
+    "tournament": {
+        "edition": "2026 FIFA World Cup",
+        "startDate": "2026-06-11",
+        "endDate": "2026-07-19",
+        "totalTeams": 48,
+        "totalMatches": 104
+    },
+    "fixtures": [
+        {
+            "matchNumber": 1,
+            "date": "2026-06-11",
+            "kickoffUtc": "2026-06-11T19:00:00Z",
+            "stage": "group-stage",
+            "group": "A",
+            "homeTeam": "Mexico",
+            "awayTeam": "South Africa",
+            "stadium": "Estadio Azteca",
+            "hostCity": "mexico-city"
+        }
+    ]
+}

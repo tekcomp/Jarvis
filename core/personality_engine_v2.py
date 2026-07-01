@@ -6,12 +6,11 @@ import time
 # =========================================================
 @dataclass
 class PersonalityState:
-    mode: str = "jarvis"
-    mood: str = "neutral"
-    emotion: str = "neutral"
-    emotion_strength: float = 0.0
+    mode: str = "assistant"
+    mood: str = "positive"
+    emotion: str = "excited"
+    emotion_strength: float = 1.0
     last_update: float = 0.0
-
 
 # =========================================================
 # ENGINE SINGLETON
