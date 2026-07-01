@@ -3,6 +3,63 @@ from datetime import date
 from .schedule import fixtures_for_team, fixtures_for_date, format_fixture
 from jarvis_core.log_reader import read_last_logs
 
+# Country routing for team-fixture queries.
+# Each entry: (lowercase keyword(s) to match in user text, canonical team name
+# as it appears in data/worldcup_2026_fixtures.json, short label for the reply).
+TEAM_QUERIES = [
+    (("usa", "united states", "u.s.", "u.s.a."), "United States", "USA"),
+    (("mexico",), "Mexico", "Mexico"),
+    (("canada",), "Canada", "Canada"),
+    (("brazil",), "Brazil", "Brazil"),
+    (("argentina",), "Argentina", "Argentina"),
+    (("france",), "France", "France"),
+    (("germany",), "Germany", "Germany"),
+    (("spain",), "Spain", "Spain"),
+    (("england",), "England", "England"),
+    (("portugal",), "Portugal", "Portugal"),
+    (("netherlands", "holland"), "Netherlands", "Netherlands"),
+    (("belgium",), "Belgium", "Belgium"),
+    (("japan",), "Japan", "Japan"),
+    (("morocco",), "Morocco", "Morocco"),
+    (("senegal",), "Senegal", "Senegal"),
+    (("ghana",), "Ghana", "Ghana"),
+    (("croatia",), "Croatia", "Croatia"),
+    (("norway",), "Norway", "Norway"),
+    (("switzerland",), "Switzerland", "Switzerland"),
+    (("australia",), "Australia", "Australia"),
+    (("south korea", "korea"), "South Korea", "South Korea"),
+    (("saudi arabia",), "Saudi Arabia", "Saudi Arabia"),
+    (("uruguay",), "Uruguay", "Uruguay"),
+    (("ecuador",), "Ecuador", "Ecuador"),
+    (("ivory coast", "cote d'ivoire"), "Ivory Coast", "Ivory Coast"),
+    (("tunisia",), "Tunisia", "Tunisia"),
+    (("egypt",), "Egypt", "Egypt"),
+    (("iran",), "Iran", "Iran"),
+    (("new zealand",), "New Zealand", "New Zealand"),
+    (("qatar",), "Qatar", "Qatar"),
+    (("haiti",), "Haiti", "Haiti"),
+    (("scotland",), "Scotland", "Scotland"),
+    (("paraguay",), "Paraguay", "Paraguay"),
+    (("panama",), "Panama", "Panama"),
+    (("jordan",), "Jordan", "Jordan"),
+    (("algeria",), "Algeria", "Algeria"),
+    (("austria",), "Austria", "Austria"),
+    (("cabo verde", "cape verde"), "Cabo Verde", "Cabo Verde"),
+    (("curaçao", "curacao"), "Curaçao", "Curaçao"),
+    (("south africa",), "South Africa", "South Africa"),
+]
+
+
+def _find_team_query(t: str):
+    """Return (canonical_name, label) for the first country whose keyword
+    appears in the lowercased text, or None if no match."""
+    for keywords, canonical, label in TEAM_QUERIES:
+        for kw in keywords:
+            if kw in t:
+                return canonical, label
+    return None
+
+
 def handle_query(text: str) -> str:
     t = text.lower().strip()
 
@@ -17,12 +74,14 @@ def handle_query(text: str) -> str:
             return "There are no recent errors."
         return "Here are the latest errors:\n" + "\n".join(error_lines)
 
-    if "usa" in t or "united states" in t:
-        fixtures = fixtures_for_team("United States")
+    team = _find_team_query(t)
+    if team is not None:
+        canonical_name, label = team
+        fixtures = fixtures_for_team(canonical_name)
         if not fixtures:
-            return "The United States has no scheduled matches in this dataset."
+            return f"{canonical_name} has no scheduled matches in this dataset."
         lines = [format_fixture(m) for m in fixtures]
-        return "Here are USA's World Cup matches:\n" + "\n".join(lines)
+        return f"Here are {label}'s World Cup matches:\n" + "\n".join(lines)
 
     if "today" in t:
         today = date.today()
