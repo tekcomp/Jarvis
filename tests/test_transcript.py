@@ -41,6 +41,26 @@ def _check(name: str, got, expected) -> bool:
     return ok
 
 
+def _extract_role_and_tag(line: str):
+    """Parse "<ts> [tag] ROLE: text" or "<ts> ROLE: text" into (role, tag, text)."""
+    parts = line.split(" ", 1)
+    if len(parts) != 2:
+        return None, None, None
+    ts, body = parts
+    tag = ""
+    if body.startswith("["):
+        end = body.find("]")
+        if end > 0:
+            tag = body[1:end]
+            body = body[end + 1:].lstrip()
+    role_end = body.find(":")
+    if role_end < 0:
+        return None, None, None
+    role = body[:role_end]
+    text = body[role_end + 1:].lstrip()
+    return role, tag, text
+
+
 def test_writes_one_line_per_event():
     print("test_writes_one_line_per_event:")
     if os.path.exists(LOG_PATH):
@@ -50,10 +70,56 @@ def test_writes_one_line_per_event():
     lines = _read_log()
     ok = _check("line count", len(lines), 2)
     if ok:
-        ok &= _check("line 0 role", lines[0].split(" ", 1)[1].split(":", 1)[0], "USER")
-        ok &= _check("line 1 role", lines[1].split(" ", 1)[1].split(":", 1)[0], "JARVIS")
+        r0, _t0, _x0 = _extract_role_and_tag(lines[0])
+        r1, _t1, _x1 = _extract_role_and_tag(lines[1])
+        ok &= _check("line 0 role", r0, "USER")
+        ok &= _check("line 1 role", r1, "JARVIS")
         ok &= _check("line 0 text", "jarvis what time is it" in lines[0], True)
         ok &= _check("line 1 text", "The current time is 01:30:00." in lines[1], True)
+    return ok
+
+
+def test_intent_tag_optional():
+    print("test_intent_tag_optional:")
+    if os.path.exists(LOG_PATH):
+        os.remove(LOG_PATH)
+    # No intent tag -> line should not have square brackets.
+    ak._log_transcript("USER", "no tag")
+    # With intent tag -> line should have "[joke] " between ts and role.
+    ak._log_transcript("JARVIS", "with tag", intent="joke")
+    lines = _read_log()
+    ok = _check("line count", len(lines), 2)
+    if ok:
+        r0, t0, _ = _extract_role_and_tag(lines[0])
+        r1, t1, _ = _extract_role_and_tag(lines[1])
+        ok &= _check("untagged role", r0, "USER")
+        ok &= _check("untagged tag is empty", t0, "")
+        ok &= _check("untagged has no brackets", "[" in lines[0], False)
+        ok &= _check("tagged role", r1, "JARVIS")
+        ok &= _check("tagged tag", t1, "joke")
+        ok &= _check("tagged has brackets", "[joke]" in lines[1], True)
+    return ok
+
+
+def test_classify_canned_intent():
+    print("test_classify_canned_intent:")
+    cases = [
+        ("playful mode", "mode"),
+        ("jarvis mode", "mode"),
+        ("assistant mode", "mode"),
+        ("tell me a joke", "joke"),
+        ("what time is it", "time"),
+        ("what is the date", "date"),
+        ("goodbye", "shutdown"),
+        ("holidays in june", "holiday"),
+        ("what about mexico", "canned"),
+    ]
+    ok = True
+    for text, want in cases:
+        got = ak._classify_canned_intent(text)
+        mark = "PASS" if got == want else "FAIL"
+        print(f"  [{mark}] {text!r:30s} -> {got!r}  (want {want!r})")
+        ok &= got == want
     return ok
 
 
@@ -146,6 +212,8 @@ def run_transcript_tests() -> dict:
     print("\n[CI] TRANSCRIPT LOGGER TESTS")
     results = [
         test_writes_one_line_per_event(),
+        test_intent_tag_optional(),
+        test_classify_canned_intent(),
         test_iso_timestamp_format(),
         test_empty_text_silently_dropped(),
         test_thread_safe(),

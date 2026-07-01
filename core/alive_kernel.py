@@ -104,18 +104,55 @@ _TRANSCRIPT_PATH = _os_transcript.path.join(
 _TRANSCRIPT_LOCK = threading.Lock()
 
 
-def _log_transcript(role: str, text: str) -> None:
-    """Append a single event to logs/transcript.log. Failures are silent."""
+def _log_transcript(role: str, text: str, intent: str = "") -> None:
+    """Append a single event to logs/transcript.log. Failures are silent.
+
+    `intent` is an optional tag describing which layer fired
+    (e.g. "joke", "time", "version", "llm"). When present it appears in
+    square brackets so the log is easy to filter:
+
+        2026-07-01T01:33:43 [joke] USER: jarvis tell me a joke
+        2026-07-01T01:33:43 [joke] JARVIS: Why did the AI cross the road?...
+    """
     if not text:
         return
     try:
         ts = datetime.datetime.now().isoformat(timespec="seconds")
+        tag = f"[{intent}] " if intent else ""
         with _TRANSCRIPT_LOCK:
             with open(_TRANSCRIPT_PATH, "a", encoding="utf-8") as f:
-                f.write(f"{ts} {role}: {text.strip()}\n")
+                f.write(f"{ts} {tag}{role}: {text.strip()}\n")
     except Exception:
         # Transcript logging is best-effort; never crash the kernel.
         pass
+
+
+# Coarse-grained tag for canned (Layer-1) intents. Used to label the
+# JARVIS line in the transcript. Not perfect — there is overlap (e.g.
+# "tell me a joke about march" matches both joke and holiday) — but the
+# first match wins which is fine for a transcript summary.
+def _classify_canned_intent(text: str) -> str:
+    t = text.lower()
+    if any(w in t for w in ("playful mode", "jarvis mode", "assistant mode")):
+        return "mode"
+    if "jarvis" in t and not any(w in t for w in ("joke", "time", "date", "holiday", "world cup")):
+        return "mode"
+    if "assistant" in t:
+        return "mode"
+    if "joke" in t:
+        return "joke"
+    if "time" in t:
+        return "time"
+    if "date" in t or "today" in t:
+        return "date"
+    if "bye" in t or "shutdown" in t or "goodbye" in t:
+        return "shutdown"
+    if any(m in t for m in (
+        "january", "february", "march", "april", "may", "june", "july",
+        "august", "september", "october", "november", "december",
+    )):
+        return "holiday"
+    return "canned"
 
 
 # =========================================================
@@ -214,12 +251,20 @@ def tts_worker():
         while not is_shutdown():
 
             try:
-                text = tts_queue.get(timeout=0.5)
+                item = tts_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
 
-            if text is None:
+            if item is None:
                 break
+
+            # Accept either legacy plain-string items or new (text, intent)
+            # tuples so the worker stays compatible with anything that
+            # still puts a bare string on the queue.
+            if isinstance(item, tuple) and len(item) == 2:
+                text, intent_tag = item
+            else:
+                text, intent_tag = item, ""
 
             system_busy.set()
             audio_state.tts_started()
@@ -229,7 +274,7 @@ def tts_worker():
                 # Record what we're about to say so the echo filter can
                 # suppress a Whisper transcript that bleeds back from speakers.
                 _remember_spoken(text)
-                _log_transcript("JARVIS", text)
+                _log_transcript("JARVIS", text, intent=intent_tag)
                 print("BEFORE SPEAK")
                 speak(text)
                 print("AFTER SPEAK")
@@ -304,7 +349,7 @@ async def cognitive_loop():
             text = strip_wake_word(text)
 
             if not text:
-                tts_queue.put("Yes sir.")
+                tts_queue.put(("Yes sir.", "wake_only"))
                 continue
 
         elif not session_active():
@@ -331,7 +376,7 @@ async def cognitive_loop():
             # Tagged shutdown intent (dict) bypasses text reply path
             if isinstance(intent, dict) and intent.get("kind") == "shutdown":
                 print(f"[CI-INTENT] {intent}")
-                tts_queue.put(intent["text"])
+                tts_queue.put((intent["text"], "shutdown"))
                 # Wait for the spoken line, then end the loop.
                 try:
                     while not tts_queue.empty():
@@ -341,7 +386,10 @@ async def cognitive_loop():
                 break  # exit cognitive_loop; finally{} handles graceful shutdown
 
             print(f"[CI-INTENT] {intent}")
-            tts_queue.put(intent)
+            # Classify the canned intent for the transcript tag. This
+            # is a coarse label; the LLM fallback below tags itself.
+            canned_tag = _classify_canned_intent(text)
+            tts_queue.put((intent, canned_tag))
             continue
 
         # =================================================
@@ -388,7 +436,7 @@ async def cognitive_loop():
         print(f"[CI-TTS] {final_text}")
 
         response_guard.update(text, final_text)
-        tts_queue.put(final_text)
+        tts_queue.put((final_text, "llm"))
 
 # =========================================================
 # VAD LOOP

@@ -24,7 +24,8 @@ A green run prints `[CI RESULT] True` and exits 0.
 | `wake_and_mode` | `test_wake_and_mode.py` | Wake-strip edge cases (`jarvis jarvis mode`), contains_wake_word, bare-mode intent branch, word-boundary regression. | `python tests\test_wake_and_mode.py` |
 | `llm_backend` | `test_llm_backend.py` | Mock Ollama HTTP server: streaming, payload shape (model/prompt/system/transcript), default-model sanity, network-failure fallback. | `python tests\test_llm_backend.py` |
 | `canned_responses` | `test_canned_responses.py` | `data/canned_responses.json` loader, mode-switch messages, goodbye, time/date templates, missing-key fallback, version + memory self-report intents. | `python tests\test_canned_responses.py` |
-| `transcript` | `test_transcript.py` | `core.alive_kernel._log_transcript` writes `logs/transcript.log` with ISO-8601 timestamps. Tests file format, threading, failure isolation. | `python tests\test_transcript.py` |
+| `transcript` | `test_transcript.py` | `core.alive_kernel._log_transcript` writes `logs/transcript.log` with ISO-8601 timestamps. Tests file format, intent tagging, threading, failure isolation, canned-intent classification. | `python tests\test_transcript.py` |
+| `transcript_tools` | `test_transcript_tools.py` | `tools/transcript_filter.py` and `tools/transcript_to_jsonl.py` — the filter and JSONL extractor utilities. Subprocess-based integration tests. | `python tests\test_transcript_tools.py` |
 
 The `brain` suite tests the **real** code path — previously it imported
 `core.spec.spec_loader`, a parallel contract layer that is no longer the
@@ -95,6 +96,78 @@ The logger is in `core.alive_kernel._log_transcript` and is wired into
 both the TTS worker (writes `JARVIS:` lines) and the cognitive loop
 (writes `USER:` lines). It is thread-safe and silently swallows
 failures so a disk-full or permission error never crashes the kernel.
+
+### Intent tagging
+
+Each line can carry an optional intent tag in square brackets between
+the timestamp and the role. The tag describes which layer answered:
+
+```text
+2026-07-01T01:33:43 [time]  USER: jarvis what time is it
+2026-07-01T01:33:43 [time]  JARVIS: The current time is 01:33.
+2026-07-01T01:33:50 [joke]  USER: jarvis tell me a joke
+2026-07-01T01:33:50 [joke]  JARVIS: Why did the AI cross the road?
+2026-07-01T01:34:10 [llm]   USER: write me a haiku about debugging
+2026-07-01T01:34:10 [llm]   JARVIS: Code's tangled mess, ...
+2026-07-01T01:34:30 [llm]   USER: my favorite color is teal
+2026-07-01T01:34:30 [mode]  JARVIS: Switched to jarvis mode.    <-- mode-switch intent wins
+```
+
+Tags you'll see: `time`, `date`, `joke`, `mode`, `holiday`, `shutdown`,
+`version`, `memory`, `wake_only`, `canned` (Layer-1 catch-all), and
+`llm` (Layer-2 fallback).
+
+## Tools
+
+Two utilities live in `tools/` and operate on `logs/transcript.log`:
+
+### `tools/transcript_filter.py`
+
+Quick interactive query. Filters by time, intent, role, text, regex.
+
+```powershell
+# Just count today's lines
+python tools\transcript_filter.py --count
+
+# What did the user say after 01:30?
+python tools\transcript_filter.py --user-only --since 01:30
+
+# Only JARVIS joke replies
+python tools\transcript_filter.py --intent joke --jarvis-only
+
+# Substring match
+python tools\transcript_filter.py --text teal
+```
+
+Defaults to the last 24 hours if no `--since` or `--last-hours` is given.
+
+### `tools/transcript_to_jsonl.py`
+
+Convert pairs of USER / JARVIS lines into a JSONL file for fine-tuning
+(OpenAI chat format).
+
+```powershell
+# All pairs
+python tools\transcript_to_jsonl.py
+
+# Only LLM-fallback exchanges, since 14:00, max 1000 pairs
+python tools\transcript_to_jsonl.py --intent llm --since 14:00 --max-pairs 1000
+
+# Dry-run to preview
+python tools\transcript_to_jsonl.py --dry-run
+
+# Custom output path
+python tools\transcript_to_jsonl.py --output data\my_pairs.jsonl
+```
+
+Output schema (one record per line):
+
+```json
+{"messages": [
+    {"role": "user",      "content": "jarvis what time is it"},
+    {"role": "assistant", "content": "The current time is 01:30."}
+], "intent": "time", "timestamp": "2026-07-01T01:30:00"}
+```
 
 ## Troubleshooting
 

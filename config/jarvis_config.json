@@ -19,7 +19,7 @@
         "port": 11434,
         "port_timeout": 15,
         "api_timeout": 20,
-        "warmup_timeout": 30,
+        "warmup_timeout": 60,
         "port_check_interval": 2,
         "api_check_interval": 2
     },

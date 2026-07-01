@@ -12,6 +12,7 @@ from tests.test_wake_and_mode import run_wake_and_mode_tests
 from tests.test_llm_backend import run_llm_backend_tests
 from tests.test_canned_responses import run_canned_responses_tests
 from tests.test_transcript import run_transcript_tests
+from tests.test_transcript_tools import run_transcript_tools_tests
 from tests.ci_dashboard import CIDashboard
 from core.contract import handle, reset
 
@@ -19,14 +20,15 @@ from core.contract import handle, reset
 # WEIGHTS (CI CONTRACT)
 # =========================================================
 WEIGHTS = {
-    "brain": 30,
-    "pipeline": 15,
-    "wake": 10,
-    "interrupt": 20,
+    "brain": 28,
+    "pipeline": 13,
+    "wake": 9,
+    "interrupt": 18,
     "wake_and_mode": 5,
-    "llm_backend": 10,
+    "llm_backend": 9,
     "canned_responses": 5,
     "transcript": 5,
+    "transcript_tools": 8,
 }
 
 
@@ -95,6 +97,9 @@ def main():
     tx = safe_run(run_transcript_tests, "transcript")
     dash.add("transcript", tx["passed"], tx["failed"], weight=WEIGHTS["transcript"])
 
+    txt = safe_run(run_transcript_tools_tests, "transcript_tools")
+    dash.add("transcript_tools", txt["passed"], txt["failed"], weight=WEIGHTS["transcript_tools"])
+
     # -------------------------
     # SYSTEM METRICS (PLACEHOLDERS FOR NOW)
     # -------------------------
@@ -160,6 +165,11 @@ def run_ci_tests() -> bool:
 
     print("[CI] transcript tests...")
     r = run_transcript_tests()
+    if r["failed"]:
+        return False
+
+    print("[CI] transcript_tools tests...")
+    r = run_transcript_tools_tests()
     if r["failed"]:
         return False
 
