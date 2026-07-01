@@ -127,6 +127,64 @@ def _log_transcript(role: str, text: str, intent: str = "") -> None:
         pass
 
 
+# Track the timestamp of the most recent JARVIS line so ratings can be
+# attached to it. Held in a module-level var with a lock; the cognitive
+# loop updates it on every JARVIS line, and rating calls read it.
+_LAST_JARVIS_LOCK = threading.Lock()
+_LAST_JARVIS_TS: str | None = None
+
+
+def _remember_jarvis_ts(ts: str) -> None:
+    global _LAST_JARVIS_TS
+    with _LAST_JARVIS_LOCK:
+        _LAST_JARVIS_TS = ts
+
+
+def get_last_jarvis_ts() -> str | None:
+    """Return the ISO timestamp of the most recent JARVIS line, or None."""
+    with _LAST_JARVIS_LOCK:
+        return _LAST_JARVIS_TS
+
+
+def _log_rating(value: int, comment: str = "") -> None:
+    """Append a RATING: line to the transcript.
+
+    Format: "<ts> RATING: <+1|0|-1> [comment]"
+
+    The extractor (`tools/transcript_to_jsonl.py`) reads these and
+    attaches the rating to the most recent JARVIS line.
+    """
+    if value not in (-1, 0, 1):
+        return
+    try:
+        ts = datetime.datetime.now().isoformat(timespec="seconds")
+        suffix = f" {comment.strip()}" if comment else ""
+        with _TRANSCRIPT_LOCK:
+            with open(_TRANSCRIPT_PATH, "a", encoding="utf-8") as f:
+                f.write(f"{ts} RATING: {value:+d}{suffix}\n")
+    except Exception:
+        pass
+
+
+def rate_last_response(value: int, comment: str = "") -> str:
+    """Rate the most recent JARVIS response. Returns a short status string.
+
+    Public API so external tools (e.g. `tools/rate_jarvis.py`) can attach
+    ratings without re-implementing the format. `value` is -1, 0, or +1.
+    """
+    if value not in (-1, 0, 1):
+        return f"invalid rating {value!r}; must be -1, 0, or 1"
+    ts = get_last_jarvis_ts()
+    if ts is None:
+        return "no JARVIS response has been logged yet"
+    _log_rating(value, comment)
+    if value == 1:
+        return f"thumbs up logged for {ts}"
+    if value == -1:
+        return f"thumbs down logged for {ts}"
+    return f"neutral rating logged for {ts}"
+
+
 # Coarse-grained tag for canned (Layer-1) intents. Used to label the
 # JARVIS line in the transcript. Not perfect — there is overlap (e.g.
 # "tell me a joke about march" matches both joke and holiday) — but the
@@ -275,6 +333,7 @@ def tts_worker():
                 # suppress a Whisper transcript that bleeds back from speakers.
                 _remember_spoken(text)
                 _log_transcript("JARVIS", text, intent=intent_tag)
+                _remember_jarvis_ts(datetime.datetime.now().isoformat(timespec="seconds"))
                 print("BEFORE SPEAK")
                 speak(text)
                 print("AFTER SPEAK")
@@ -337,6 +396,22 @@ async def cognitive_loop():
 
         print(f"[CI-AUDIO] HEARD: {text}")
         _log_transcript("USER", text)
+
+        # -------------------------------------------------------------
+        # Voice-driven rating: "jarvis thumbs up" / "thumbs down" / etc.
+        # Lets the user rate the previous JARVIS response without
+        # waiting for it to be exported. Order matters: this runs
+        # BEFORE the wake-gate so a follow-up "thumbs up" (no wake
+        # word) still triggers the rating.
+        # -------------------------------------------------------------
+        if re.search(r"\b(thumbs\s*up|good answer|great answer|nice answer|well done|good job|like that)\b", text):
+            _log_rating(1, "voice-up")
+            tts_queue.put(("Glad it helped.", "rating"))
+            continue
+        if re.search(r"\b(thumbs\s*down|bad answer|wrong answer|terrible|don't like that|that's wrong)\b", text):
+            _log_rating(-1, "voice-down")
+            tts_queue.put(("I'll try to do better next time.", "rating"))
+            continue
 
         # =================================================
         # WAKE GATE V1

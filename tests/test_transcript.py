@@ -208,6 +208,72 @@ def test_failure_does_not_raise():
     return True
 
 
+def test_log_rating_writes_line():
+    print("test_log_rating_writes_line:")
+    if os.path.exists(LOG_PATH):
+        os.remove(LOG_PATH)
+    ak._log_rating(1, "test")
+    ak._log_rating(-1)
+    ak._log_rating(0, "neutral")
+    lines = _read_log()
+    ok = _check("line count", len(lines), 3)
+    if ok:
+        # Line 0: rating 1
+        ok &= _check("up rating format", "RATING: +1 test" in lines[0], True)
+        # Line 1: rating -1, no comment
+        ok &= _check("down rating format", "RATING: -1" in lines[1], True)
+        # Line 2: rating 0
+        ok &= _check("zero rating format", "RATING: +0" in lines[2] or "RATING: 0" in lines[2], True)
+    return ok
+
+
+def test_log_rating_rejects_invalid():
+    print("test_log_rating_rejects_invalid:")
+    if os.path.exists(LOG_PATH):
+        os.remove(LOG_PATH)
+    ak._log_rating(2, "should be dropped")
+    ak._log_rating(-5)
+    lines = _read_log()
+    return _check("line count after invalid writes", len(lines), 0)
+
+
+def test_remember_and_get_last_jarvis_ts():
+    print("test_remember_and_get_last_jarvis_ts:")
+    # No JARVIS line yet
+    before = ak.get_last_jarvis_ts()
+    ak._remember_jarvis_ts("2026-07-01T01:30:00")
+    after = ak.get_last_jarvis_ts()
+    ak._remember_jarvis_ts("2026-07-01T01:31:00")
+    final = ak.get_last_jarvis_ts()
+    return _check("latest ts remembered", (before, after, final),
+                  (None, "2026-07-01T01:30:00", "2026-07-01T01:31:00"))
+
+
+def test_rate_last_response_routes_to_log():
+    print("test_rate_last_response_routes_to_log:")
+    if os.path.exists(LOG_PATH):
+        os.remove(LOG_PATH)
+    # Reset module-level JARVIS ts so we can test the "no JARVIS yet" path.
+    ak._remember_jarvis_ts("")  # empty string is falsy; get_last_jarvis_ts returns it
+    # Force-clear: monkey-patch the global
+    saved = ak._LAST_JARVIS_TS
+    ak._LAST_JARVIS_TS = None
+    try:
+        # No JARVIS line yet -> error
+        msg = ak.rate_last_response(1)
+        ok = _check("no-jarvis message", "no JARVIS response" in msg, True)
+        # After remembering a JARVIS ts, rating should succeed
+        ak._remember_jarvis_ts("2026-07-01T01:30:00")
+        msg = ak.rate_last_response(1, "great")
+        ok &= _check("thumbs up message", "thumbs up" in msg, True)
+        lines = _read_log()
+        ok &= _check("rating line written", len(lines), 1)
+        ok &= _check("rating content", "RATING: +1 great" in lines[0], True)
+    finally:
+        ak._LAST_JARVIS_TS = saved
+    return ok
+
+
 def run_transcript_tests() -> dict:
     print("\n[CI] TRANSCRIPT LOGGER TESTS")
     results = [
@@ -218,6 +284,10 @@ def run_transcript_tests() -> dict:
         test_empty_text_silently_dropped(),
         test_thread_safe(),
         test_failure_does_not_raise(),
+        test_log_rating_writes_line(),
+        test_log_rating_rejects_invalid(),
+        test_remember_and_get_last_jarvis_ts(),
+        test_rate_last_response_routes_to_log(),
     ]
     # Cleanup the test artifact so it doesn't pollute the live log.
     if os.path.exists(LOG_PATH):

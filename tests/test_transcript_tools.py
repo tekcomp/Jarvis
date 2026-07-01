@@ -18,6 +18,7 @@ SAMPLE = """2026-07-01T01:30:00 USER: jarvis what time is it
 2026-07-01T01:31:00 [joke] JARVIS: Why did the AI cross the road?
 2026-07-01T01:32:00 USER: jarvis my favorite color is teal
 2026-07-01T01:32:00 [llm] JARVIS: Got it, teal.
+2026-07-01T01:32:30 RATING: +1 great answer
 2026-07-01T01:33:00 USER: what did i just say
 2026-07-01T01:33:00 [llm] JARVIS: You said your favorite color is teal.
 2026-07-01T01:34:00 USER: jarvis goodbye
@@ -139,6 +140,102 @@ def test_filter_no_results():
     return ok
 
 
+def test_jsonl_split_by_intent():
+    print("test_jsonl_split_by_intent:")
+    _write_sample()
+    stem = os.path.splitext(OUT)[0]
+    r = _run(os.path.join(TOOLS, "transcript_to_jsonl.py"),
+             "--output", OUT, "--split-by-intent")
+    if r.returncode != 0:
+        print(f"  [FAIL] non-zero exit: {r.returncode}\n  stderr: {r.stderr}")
+        return False
+    # Expect 4 intent files: time, joke, llm, shutdown (no untagged in sample).
+    expected = {
+        "time": 1,
+        "joke": 1,
+        "llm": 2,
+        "shutdown": 1,
+    }
+    ok = True
+    for intent, count in expected.items():
+        path = f"{stem}__{intent}.jsonl"
+        if not os.path.exists(path):
+            print(f"  [FAIL] expected output file {path} not created")
+            ok = False
+            continue
+        with open(path, "r", encoding="utf-8") as f:
+            lines = [l for l in f if l.strip()]
+        ok &= _check(f"{intent} file pair count", len(lines), count)
+    # The single combined file should NOT exist when --split-by-intent is on.
+    ok &= _check("combined file should not exist", os.path.exists(OUT), False)
+    # Cleanup the per-intent files
+    for intent in expected:
+        path = f"{stem}__{intent}.jsonl"
+        if os.path.exists(path):
+            os.remove(path)
+    return ok
+
+
+def test_jsonl_rating_attached():
+    print("test_jsonl_rating_attached:")
+    _write_sample()
+    r = _run(os.path.join(TOOLS, "transcript_to_jsonl.py"), "--output", OUT)
+    if r.returncode != 0:
+        print(f"  [FAIL] non-zero exit: {r.returncode}\n  stderr: {r.stderr}")
+        return False
+    with open(OUT, "r", encoding="utf-8") as f:
+        pairs = [json.loads(l) for l in f if l.strip()]
+    # The RATING: +1 line at 01:32:30 comes right after the "Got it, teal."
+    # JARVIS line. The rating should attach to that JARVIS line's pair
+    # (the one where the user said "my favorite color is teal" and Jarvis
+    # said "Got it, teal.")
+    teal_pair = next(
+        (p for p in pairs if "Got it, teal" in p["messages"][1]["content"]),
+        None,
+    )
+    if teal_pair is None:
+        print("  [FAIL] could not find the 'Got it, teal' pair")
+        return False
+    ok = _check("rating attached to prior JARVIS line", teal_pair.get("rating"), 1)
+    return ok
+
+
+def test_jsonl_min_rating_filter():
+    print("test_jsonl_min_rating_filter:")
+    _write_sample()
+    r = _run(os.path.join(TOOLS, "transcript_to_jsonl.py"),
+             "--output", OUT, "--min-rating", "1")
+    if r.returncode != 0:
+        print(f"  [FAIL] non-zero exit: {r.returncode}\n  stderr: {r.stderr}")
+        return False
+    with open(OUT, "r", encoding="utf-8") as f:
+        pairs = [json.loads(l) for l in f if l.strip()]
+    # 1 pair has rating=+1 in our sample (the teal-recall), so output is 1.
+    return _check("only rated-up pair kept", len(pairs), 1)
+
+
+def test_rate_jarvis_appends_line():
+    print("test_rate_jarvis_appends_line:")
+    _write_sample()
+    r = _run(os.path.join(TOOLS, "rate_jarvis.py"), "--value", "1", "--comment", "test")
+    if r.returncode != 0:
+        print(f"  [FAIL] non-zero exit: {r.returncode}\n  stderr: {r.stderr}")
+        return False
+    with open(LOG, "r", encoding="utf-8") as f:
+        content = f.read()
+    ok = _check("rating line appended", content.count("RATING: +1 test"), 1)
+    ok &= _check("stdout reports success", "thumbs up" in r.stdout, True)
+    return ok
+
+
+def test_rate_jarvis_invalid_value():
+    print("test_rate_jarvis_invalid_value:")
+    _write_sample()
+    r = _run(os.path.join(TOOLS, "rate_jarvis.py"), "--value", "5")
+    ok = _check("non-zero exit", r.returncode != 0, True)
+    return ok
+
+
 def run_transcript_tools_tests() -> dict:
     print("\n[CI] TRANSCRIPT TOOLS TESTS")
     results = [
@@ -150,11 +247,22 @@ def run_transcript_tools_tests() -> dict:
         test_filter_intent_joke(),
         test_filter_text_substring(),
         test_filter_no_results(),
+        test_jsonl_split_by_intent(),
+        test_jsonl_rating_attached(),
+        test_jsonl_min_rating_filter(),
+        test_rate_jarvis_appends_line(),
+        test_rate_jarvis_invalid_value(),
     ]
     # Cleanup
     for p in (OUT, LOG):
         if os.path.exists(p):
             os.remove(p)
+    # Also clean up any leftover per-intent files.
+    data_dir = os.path.join(ROOT, "data")
+    if os.path.isdir(data_dir):
+        for f in os.listdir(data_dir):
+            if f.startswith("_test_pairs__") and f.endswith(".jsonl"):
+                os.remove(os.path.join(data_dir, f))
     passed = sum(1 for r in results if r)
     failed = sum(1 for r in results if not r)
     print(f"transcript_tools: {passed} passed / {failed} failed")

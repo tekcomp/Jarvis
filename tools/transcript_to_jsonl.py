@@ -124,6 +124,27 @@ def main() -> int:
     parser.add_argument("--intent", default=None, help="Only keep pairs with this intent tag")
     parser.add_argument("--max-pairs", type=int, default=None, help="Stop after N pairs")
     parser.add_argument("--dry-run", action="store_true", help="Don't write the output file")
+    parser.add_argument(
+        "--split-by-intent",
+        action="store_true",
+        help="Write one JSONL file per intent tag, suffixed with the intent name. "
+        "Useful for fine-tuning only the 'llm' exchanges (where the model decides) "
+        "and excluding deterministic canned replies.",
+    )
+    parser.add_argument(
+        "--include-untagged",
+        action="store_true",
+        help="When --split-by-intent is on, also include pairs that have no intent tag. "
+        "Default is to skip untagged pairs (mostly the boot chime 'System online.').",
+    )
+    parser.add_argument(
+        "--min-rating",
+        type=int,
+        default=None,
+        choices=[-1, 0, 1],
+        help="When the transcript has user-supplied ratings (see --rate), only keep pairs "
+        "with rating >= this value. -1 = thumbs down only, 0 = neutral+up, 1 = up only.",
+    )
     args = parser.parse_args()
 
     log_path = Path(args.log)
@@ -141,19 +162,57 @@ def main() -> int:
         print("  no pairs matched; nothing to write")
         return 0
 
+    # Attach ratings if the transcript has any. Always load the rating
+    # map so the `rating` field appears in the JSONL output. The
+    # --min-rating filter is applied on top of that.
+    rating_map = _load_ratings(log_path)
+    if rating_map:
+        pairs = [(ts, intent, u, j, rating_map.get(ts, 0)) for (ts, intent, u, j) in pairs]
+        if args.min_rating is not None:
+            before = len(pairs)
+            pairs = [p for p in pairs if p[4] >= args.min_rating]
+            print(f"  filter --min-rating={args.min_rating}: {before} -> {len(pairs)} pair(s)")
+
     print(f"  extracted {len(pairs)} pair(s) from {log_path}")
+
     if args.dry_run:
-        for ts, intent, u, j in pairs[:5]:
+        for tup in pairs[:5]:
+            ts, intent, u, j = tup[:4]
+            rating = tup[4] if len(tup) == 5 else 0
             preview_u = (u[:60] + "...") if len(u) > 60 else u
             preview_j = (j[:60] + "...") if len(j) > 60 else j
             tag = f"[{intent}]" if intent else "[no-tag]"
-            print(f"    {ts} {tag}  U: {preview_u!r}  J: {preview_j!r}")
+            rat = f" rating={rating:+d}" if rating else ""
+            print(f"    {ts} {tag}{rat}  U: {preview_u!r}  J: {preview_j!r}")
         if len(pairs) > 5:
             print(f"    ... and {len(pairs) - 5} more")
         return 0
 
+    if args.split_by_intent:
+        # Group by intent. Untagged pairs go to "_untagged" (or are skipped
+        # unless --include-untagged is given).
+        by_intent: dict[str, list] = {}
+        for tup in pairs:
+            ts, intent, u, j = tup[:4]
+            rating = tup[4] if len(tup) == 5 else 0
+            if not intent:
+                if not args.include_untagged:
+                    continue
+                intent = "_untagged"
+            by_intent.setdefault(intent, []).append((ts, intent, u, j, rating))
+
+        # Write one file per intent, suffixed with the intent name.
+        stem = out_path.with_suffix("")
+        for intent, group in sorted(by_intent.items()):
+            intent_path = Path(f"{stem}__{intent}.jsonl")
+            _write_jsonl(intent_path, group)
+            print(f"    wrote {len(group):3d} pair(s) to {intent_path}")
+        return 0
+
     with out_path.open("w", encoding="utf-8") as f:
-        for ts, intent, u, j in pairs:
+        for tup in pairs:
+            ts, intent, u, j = tup[:4]
+            rating = tup[4] if len(tup) == 5 else 0
             rec = {
                 "messages": [
                     {"role": "user", "content": u},
@@ -162,10 +221,59 @@ def main() -> int:
                 "intent": intent,
                 "timestamp": ts,
             }
+            if rating:
+                rec["rating"] = rating
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     print(f"  wrote {len(pairs)} pair(s) to {out_path}")
     return 0
+
+
+def _write_jsonl(path: Path, rows) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as f:
+        for ts, intent, u, j, rating in rows:
+            rec = {
+                "messages": [
+                    {"role": "user", "content": u},
+                    {"role": "assistant", "content": j},
+                ],
+                "intent": intent,
+                "timestamp": ts,
+            }
+            if rating:
+                rec["rating"] = rating
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def _load_ratings(log_path: Path) -> dict[str, int]:
+    """Parse RATING: lines from the transcript.
+
+    Format: "<ts> RATING: <+1|0|-1> <comment-or-blank>"
+    Returns a dict mapping the *previous* JARVIS line's timestamp to the rating.
+    """
+    ratings: dict[str, int] = {}
+    last_jarvis_ts: str | None = None
+    if not log_path.exists():
+        return ratings
+    with log_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            parsed = _parse_line(line)
+            if not parsed:
+                # Try the rating format: "<ts> RATING: <value> [comment]"
+                parts = line.rstrip("\n").split(" ", 2)
+                if len(parts) >= 3 and parts[1] == "RATING:":
+                    try:
+                        value = int(parts[2].split()[0])
+                        if last_jarvis_ts and -1 <= value <= 1:
+                            ratings[last_jarvis_ts] = value
+                    except ValueError:
+                        pass
+                continue
+            ts, _intent, role, _text = parsed
+            if role == "JARVIS":
+                last_jarvis_ts = ts
+    return ratings
 
 
 if __name__ == "__main__":
