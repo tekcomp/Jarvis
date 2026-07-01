@@ -11,6 +11,7 @@ from tests.test_interrupt import run_interrupt_test
 from tests.test_wake_and_mode import run_wake_and_mode_tests
 from tests.test_llm_backend import run_llm_backend_tests
 from tests.test_canned_responses import run_canned_responses_tests
+from tests.test_transcript import run_transcript_tests
 from tests.ci_dashboard import CIDashboard
 from core.contract import handle, reset
 
@@ -18,13 +19,14 @@ from core.contract import handle, reset
 # WEIGHTS (CI CONTRACT)
 # =========================================================
 WEIGHTS = {
-    "brain": 35,
+    "brain": 30,
     "pipeline": 15,
     "wake": 10,
     "interrupt": 20,
     "wake_and_mode": 5,
     "llm_backend": 10,
     "canned_responses": 5,
+    "transcript": 5,
 }
 
 
@@ -90,6 +92,9 @@ def main():
     canned = safe_run(run_canned_responses_tests, "canned_responses")
     dash.add("canned_responses", canned["passed"], canned["failed"], weight=WEIGHTS["canned_responses"])
 
+    tx = safe_run(run_transcript_tests, "transcript")
+    dash.add("transcript", tx["passed"], tx["failed"], weight=WEIGHTS["transcript"])
+
     # -------------------------
     # SYSTEM METRICS (PLACEHOLDERS FOR NOW)
     # -------------------------
@@ -150,6 +155,11 @@ def run_ci_tests() -> bool:
 
     print("[CI] canned_responses tests...")
     r = run_canned_responses_tests()
+    if r["failed"]:
+        return False
+
+    print("[CI] transcript tests...")
+    r = run_transcript_tests()
     if r["failed"]:
         return False
 

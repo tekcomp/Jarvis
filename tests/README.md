@@ -23,7 +23,8 @@ A green run prints `[CI RESULT] True` and exits 0.
 | `interrupt` | `test_interrupt.py` | `InterruptFSM` allowed/blocked/spam behavior. | (called by `ci_runner`) |
 | `wake_and_mode` | `test_wake_and_mode.py` | Wake-strip edge cases (`jarvis jarvis mode`), contains_wake_word, bare-mode intent branch, word-boundary regression. | `python tests\test_wake_and_mode.py` |
 | `llm_backend` | `test_llm_backend.py` | Mock Ollama HTTP server: streaming, payload shape (model/prompt/system/transcript), default-model sanity, network-failure fallback. | `python tests\test_llm_backend.py` |
-| `canned_responses` | `test_canned_responses.py` | `data/canned_responses.json` loader, mode-switch messages, goodbye, time/date templates, missing-key fallback. | `python tests\test_canned_responses.py` |
+| `canned_responses` | `test_canned_responses.py` | `data/canned_responses.json` loader, mode-switch messages, goodbye, time/date templates, missing-key fallback, version + memory self-report intents. | `python tests\test_canned_responses.py` |
+| `transcript` | `test_transcript.py` | `core.alive_kernel._log_transcript` writes `logs/transcript.log` with ISO-8601 timestamps. Tests file format, threading, failure isolation. | `python tests\test_transcript.py` |
 
 The `brain` suite tests the **real** code path — previously it imported
 `core.spec.spec_loader`, a parallel contract layer that is no longer the
@@ -59,6 +60,41 @@ purposes but the live kernel uses `core.brain` directly.
 | `JARVIS_MEM_TURNS` | `6` | Ring-buffer size for conversation memory. |
 | `PYTHONPATH` | `.` | Must include the repo root so `from core import brain` works. |
 | `PYTHONIOENCODING` | `utf-8` | Required on Windows so emojis in jokes/TTS don't crash `cp1252`. |
+
+## Transcript log
+
+`logs/transcript.log` is written by the live kernel every time the user
+says something or Jarvis speaks. Format is one line per event:
+
+```text
+2026-07-01T01:33:43 USER: jarvis what time is it
+2026-07-01T01:33:43 JARVIS: The current time is 01:30:00.
+2026-07-01T01:33:43 USER: thanks
+2026-07-01T01:33:44 JARVIS: You're welcome.
+```
+
+Use it to:
+
+- See what the user actually said (vs. what you think they said)
+- Audit Jarvis's replies (e.g. "did Jarvis actually answer that?")
+- Build a training set for fine-tuning
+
+Tail it in real time:
+
+```powershell
+Get-Content logs\transcript.log -Tail 20 -Wait
+```
+
+Or grep for a specific event:
+
+```powershell
+Select-String -Path logs\transcript.log -Pattern "USER:.*teal"
+```
+
+The logger is in `core.alive_kernel._log_transcript` and is wired into
+both the TTS worker (writes `JARVIS:` lines) and the cognitive loop
+(writes `USER:` lines). It is thread-safe and silently swallows
+failures so a disk-full or permission error never crashes the kernel.
 
 ## Troubleshooting
 

@@ -83,6 +83,42 @@ def _is_self_echo(text: str, threshold: float = 0.6, min_tokens: int = 3) -> boo
 
 
 # =========================================================
+# TRANSCRIPT LOGGER
+# =========================================================
+# Append every STT-heard phrase and every TTS-spoken line to
+# logs/transcript.log with ISO-8601 timestamps. Two roles: USER (what
+# Whisper transcribed) and JARVIS (what TTS said). The file is plain
+# text, one line per event, and safe to tail with `Get-Content -Wait`.
+#
+# This is the single best place to look for:
+#   - "What did I just say?"  -> grep USER
+#   - "What did Jarvis say?"  -> grep JARVIS
+#   - "Did the user say X or Y?" -> compare timestamps in USER
+#   - "When was the last conversation?" -> sort by timestamp
+import os as _os_transcript
+
+_TRANSCRIPT_PATH = _os_transcript.path.join(
+    _os_transcript.path.dirname(_os_transcript.path.abspath(__file__)),
+    "..", "logs", "transcript.log",
+)
+_TRANSCRIPT_LOCK = threading.Lock()
+
+
+def _log_transcript(role: str, text: str) -> None:
+    """Append a single event to logs/transcript.log. Failures are silent."""
+    if not text:
+        return
+    try:
+        ts = datetime.datetime.now().isoformat(timespec="seconds")
+        with _TRANSCRIPT_LOCK:
+            with open(_TRANSCRIPT_PATH, "a", encoding="utf-8") as f:
+                f.write(f"{ts} {role}: {text.strip()}\n")
+    except Exception:
+        # Transcript logging is best-effort; never crash the kernel.
+        pass
+
+
+# =========================================================
 # INTENT ENGINE (HARD GUARANTEE LAYER)
 # =========================================================
 def intent_router(text: str):
@@ -193,6 +229,7 @@ def tts_worker():
                 # Record what we're about to say so the echo filter can
                 # suppress a Whisper transcript that bleeds back from speakers.
                 _remember_spoken(text)
+                _log_transcript("JARVIS", text)
                 print("BEFORE SPEAK")
                 speak(text)
                 print("AFTER SPEAK")
@@ -254,6 +291,7 @@ async def cognitive_loop():
             continue
 
         print(f"[CI-AUDIO] HEARD: {text}")
+        _log_transcript("USER", text)
 
         # =================================================
         # WAKE GATE V1
