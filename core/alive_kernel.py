@@ -43,6 +43,46 @@ tts_queue = queue.Queue()
 
 
 # =========================================================
+# ECHO SELF-TEXT FILTER
+# =========================================================
+# Keeps the last few things Jarvis actually said. If Whisper transcribes
+# something that overlaps heavily with a recent TTS line, we assume the mic
+# picked up the bot's own audio and drop the utterance.
+_ECHO_HISTORY = []   # list[str] — most recent TTS lines, max 3
+_ECHO_HISTORY_MAX = 3
+
+
+def _remember_spoken(text: str) -> None:
+    if not text:
+        return
+    _ECHO_HISTORY.append(text.lower().strip())
+    if len(_ECHO_HISTORY) > _ECHO_HISTORY_MAX:
+        _ECHO_HISTORY.pop(0)
+
+
+def _is_self_echo(text: str, threshold: float = 0.6, min_tokens: int = 3) -> bool:
+    """True if `text` looks like an echo of the last TTS utterance.
+
+    Uses token-overlap ratio against the most recent spoken line. Threshold
+    0.6 means >=60% of the new tokens were in the previous utterance.
+    `min_tokens` rejects very short inputs (1-2 words) so a one-word follow-up
+    like 'time' after a time answer doesn't get classified as an echo.
+    """
+    if not _ECHO_HISTORY:
+        return False
+    heard = text.lower().split()
+    if len(heard) < min_tokens:
+        return False
+    heard_set = set(heard)
+    last = _ECHO_HISTORY[-1]
+    spoken = set(last.split())
+    if not spoken:
+        return False
+    overlap = len(heard_set & spoken) / max(len(heard_set), 1)
+    return overlap >= threshold
+
+
+# =========================================================
 # INTENT ENGINE (HARD GUARANTEE LAYER)
 # =========================================================
 def intent_router(text: str):
@@ -108,6 +148,15 @@ def intent_router(text: str):
 
         return "Please specify a month."
 
+    # ---- World Cup 2026 voice intent ----
+    try:
+        from core.wc_intent import handle_wc_intent
+        wc_answer = handle_wc_intent(t)
+        if wc_answer:
+            return wc_answer
+    except Exception as e:
+        print(f"[CI-WC] error: {e}")
+
     return None
 
 
@@ -141,6 +190,9 @@ def tts_worker():
 
             try:
                 print(f"[JARVIS TTS] {text}")
+                # Record what we're about to say so the echo filter can
+                # suppress a Whisper transcript that bleeds back from speakers.
+                _remember_spoken(text)
                 print("BEFORE SPEAK")
                 speak(text)
                 print("AFTER SPEAK")
@@ -195,6 +247,10 @@ async def cognitive_loop():
 
         if not is_valid_transcript(text):
             print(f"[CI-FILTER] rejected: {text}")
+            continue
+
+        if _is_self_echo(text):
+            print(f"[CI-ECHO] self-echo dropped: {text}")
             continue
 
         print(f"[CI-AUDIO] HEARD: {text}")
