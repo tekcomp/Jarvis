@@ -365,14 +365,23 @@ function Promote-TopRated {
     $top = $candidates | Sort-Object -Property @{Expression = "Rating"; Descending = $true }, @{Expression = "Timestamp"; Descending = $true } | Select-Object -First $count
 
     # Load the canned-responses file.
+    # ConvertFrom-Json returns PSCustomObject; nested objects are also
+    # PSCustomObject, which is NOT indexable with []. Coerce each top-level
+    # value to [ordered]@{} so we can $bucket[$key] = $value later.
     $canned = [ordered]@{}
     if (Test-Path $CannedResponsesPath) {
-        # ConvertFrom-Json -AsHashtable is PowerShell 7+; fall back to a
-        # @{} cast for Windows PowerShell 5.1 compatibility.
         $raw = Get-Content $CannedResponsesPath -Raw | ConvertFrom-Json
         if ($null -ne $raw) {
             foreach ($prop in $raw.PSObject.Properties) {
-                $canned[$prop.Name] = $prop.Value
+                $val = $prop.Value
+                if ($val -is [System.Management.Automation.PSObject] -and $val -isnot [hashtable] -and $val -isnot [System.Collections.IDictionary]) {
+                    $inner = [ordered]@{}
+                    if ($val.PSObject.Properties) {
+                        foreach ($p2 in $val.PSObject.Properties) { $inner[$p2.Name] = $p2.Value }
+                    }
+                    $val = $inner
+                }
+                $canned[$prop.Name] = $val
             }
         }
     }

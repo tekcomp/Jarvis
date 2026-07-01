@@ -30,7 +30,8 @@ _JOKES_PATH = os.path.join(
 
 def _load_joke_banks() -> dict:
     try:
-        with open(_JOKES_PATH, "r", encoding="utf-8") as f:
+        # Use utf-8-sig to tolerate a UTF-8 BOM if the file has one.
+        with open(_JOKES_PATH, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
         # Ensure every key exists; default to an empty list if missing.
         for key in ("jarvis", "genx", "millennial", "boomer", "genz", "dad"):
@@ -63,7 +64,9 @@ _CANNED_PATH = os.path.join(
 
 def _load_canned_responses() -> dict:
     try:
-        with open(_CANNED_PATH, "r", encoding="utf-8") as f:
+        # Use utf-8-sig to tolerate a UTF-8 BOM if the file has one
+        # (PowerShell Set-Content -Encoding UTF8 writes a BOM on Windows).
+        with open(_CANNED_PATH, "r", encoding="utf-8-sig") as f:
             return json.load(f)
     except Exception as e:
         print(f"[CI-CANNED] failed to load {_CANNED_PATH}: {e}")

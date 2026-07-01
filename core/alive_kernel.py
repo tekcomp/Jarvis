@@ -4,6 +4,7 @@
 
 import asyncio
 import queue
+import re
 import threading
 import time
 import datetime
@@ -465,6 +466,23 @@ async def cognitive_loop():
             # is a coarse label; the LLM fallback below tags itself.
             canned_tag = _classify_canned_intent(text)
             tts_queue.put((intent, canned_tag))
+            # Wait for the TTS worker to actually speak this line before
+            # looping back. The naive tts_queue.join() would block the
+            # event loop and prevent the shutdown signal from being
+            # processed, so we poll the unfinished-task count with short
+            # async sleeps. Capped at MAX_WAIT_S so a hung TTS worker
+            # can't stall the cognitive loop indefinitely.
+            MAX_WAIT_S = 30.0
+            waited = 0.0
+            try:
+                while tts_queue.unfinished_tasks > 0 and not is_shutdown():
+                    await asyncio.sleep(0.05)
+                    waited += 0.05
+                    if waited >= MAX_WAIT_S:
+                        print(f"[CI-INTENT] tts_queue wait timed out after {MAX_WAIT_S}s")
+                        break
+            except Exception as e:
+                print(f"[CI-INTENT] tts_queue wait failed (non-fatal): {e}")
             continue
 
         # =================================================

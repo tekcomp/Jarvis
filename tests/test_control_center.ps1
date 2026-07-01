@@ -27,7 +27,7 @@ if (Test-Path $testCanned) {
   },
   "promoted": {}
 }
-"@ | Set-Content -Path $testCanned -Encoding UTF8
+"@ | Set-Content -Path $testCanned -Encoding ASCII
 
 # Test fixture: 3 USER/JARVIS pairs with ratings.
 @"
@@ -41,7 +41,7 @@ if (Test-Path $testCanned) {
 2026-07-01T01:34:00 USER: my favorite color is teal
 2026-07-01T01:34:00 [llm] JARVIS: Got it, teal.
 2026-07-01T01:35:00 RATING: -1 wrong
-"@ | Set-Content -Path $liveLog -Encoding UTF8
+"@ | Set-Content -Path $liveLog -Encoding ASCII
 
 # Extract the rating-related functions from the control center.
 $source = Get-Content $scriptPath -Raw
@@ -80,38 +80,9 @@ Test-Result ($up -eq 2) "2 thumbs-up (+1) entries"
 Test-Result ($up2 -eq 1) "1 thumbs-up (+2) entry"
 Test-Result ($down -eq 1) "1 thumbs-down entry"
 
-# === Test 3: Rate-LastResponse (+1) ===
+# === Test 3: Export-RatingsToCsv (run BEFORE Rate-LastResponse consumes the JARVIS lines) ===
 Write-Host ""
-Write-Host "=== Test 3: Rate-LastResponse (+1) ===" -ForegroundColor Cyan
-Rate-LastResponse -value 1 6>&1 | Out-Null
-$last = Get-Content $liveLog -Tail 1
-Test-Result ($last -match "RATING: \+1") "+1 rating appended"
-
-# === Test 4: Rate-LastResponse (-1) ===
-Write-Host ""
-Write-Host "=== Test 4: Rate-LastResponse (-1) ===" -ForegroundColor Cyan
-Rate-LastResponse -value -1 6>&1 | Out-Null
-$last = Get-Content $liveLog -Tail 1
-Test-Result ($last -match "RATING: -1") "-1 rating appended"
-
-# === Test 5: Rate-LastResponse (0) ===
-Write-Host ""
-Write-Host "=== Test 5: Rate-LastResponse (0) ===" -ForegroundColor Cyan
-Rate-LastResponse -value 0 6>&1 | Out-Null
-$last = Get-Content $liveLog -Tail 1
-Test-Result ($last -match "RATING: \+0") "neutral rating appended"
-
-# === Test 6: Show-TopRatedJarvisLines ===
-Write-Host ""
-Write-Host "=== Test 6: Show-TopRatedJarvisLines (top 1) ===" -ForegroundColor Cyan
-$out = (Show-TopRatedJarvisLines -count 1) 6>&1 | Out-String
-# The fixture has one rating=+2 (the joke) and rating=+1 (time). Top-1 should be the joke.
-Test-Result ($out -match "cross the road") "top-1 is the highest-rated JARVIS line"
-Test-Result ($out -match "\+\+") "shows two plus signs for rating=+2"
-
-# === Test 7: Export-RatingsToCsv ===
-Write-Host ""
-Write-Host "=== Test 7: Export-RatingsToCsv ===" -ForegroundColor Cyan
+Write-Host "=== Test 3: Export-RatingsToCsv ===" -ForegroundColor Cyan
 if (Test-Path $testCsv) { Remove-Item $testCsv -Force }
 Export-RatingsToCsv 6>&1 | Out-Null
 Test-Result (Test-Path $testCsv) "CSV file created"
@@ -130,9 +101,17 @@ if (Test-Path $testCsv) {
     Test-Result ($csv[2].Rating -eq "-1") "third row rating=-1"
 }
 
-# === Test 8: Promote-TopRated ===
+# === Test 4: Show-TopRatedJarvisLines (run before Rate-LastResponse consumes the JARVIS lines) ===
 Write-Host ""
-Write-Host "=== Test 8: Promote-TopRated (top 2, min rating=2) ===" -ForegroundColor Cyan
+Write-Host "=== Test 4: Show-TopRatedJarvisLines (top 1) ===" -ForegroundColor Cyan
+$out = (Show-TopRatedJarvisLines -count 1) 6>&1 | Out-String
+# The fixture has one rating=+2 (the joke) and rating=+1 (time). Top-1 should be the joke.
+Test-Result ($out -match "cross the road") "top-1 is the highest-rated JARVIS line"
+Test-Result ($out -match "\+\+") "shows two plus signs for rating=+2"
+
+# === Test 5: Promote-TopRated (run before Rate-LastResponse consumes the JARVIS lines) ===
+Write-Host ""
+Write-Host "=== Test 5: Promote-TopRated (top 2, min rating=2) ===" -ForegroundColor Cyan
 # We need to feed "y\n" to Read-Host. Simulate by setting the input stream.
 # PowerShell trick: use 'echo y | ...' via the pipeline.
 $confirmation = "y"
@@ -145,11 +124,38 @@ if (Test-Path $testCanned) {
     try {
         $canned = Get-Content $testCanned -Raw | ConvertFrom-Json
         Test-Result ($null -ne $canned.promoted) "canned_responses.json has 'promoted' key"
+        # With minRating=2, only the joke (rating=+2) qualifies. It should be in the bucket.
+        $promotedHas = $false
+        foreach ($p in $canned.promoted.PSObject.Properties) {
+            if ($p.Value -match "cross the road") { $promotedHas = $true; break }
+        }
+        Test-Result $promotedHas "promoted bucket contains the top-rated line"
     }
     catch {
         Test-Result $false "canned_responses.json is valid JSON"
     }
 }
+
+# === Test 6: Rate-LastResponse (+1) ===
+Write-Host ""
+Write-Host "=== Test 6: Rate-LastResponse (+1) ===" -ForegroundColor Cyan
+Rate-LastResponse -value 1 6>&1 | Out-Null
+$last = Get-Content $liveLog -Tail 1
+Test-Result ($last -match "RATING: \+1") "+1 rating appended"
+
+# === Test 7: Rate-LastResponse (-1) ===
+Write-Host ""
+Write-Host "=== Test 7: Rate-LastResponse (-1) ===" -ForegroundColor Cyan
+Rate-LastResponse -value -1 6>&1 | Out-Null
+$last = Get-Content $liveLog -Tail 1
+Test-Result ($last -match "RATING: -1") "-1 rating appended"
+
+# === Test 8: Rate-LastResponse (0) ===
+Write-Host ""
+Write-Host "=== Test 8: Rate-LastResponse (0) ===" -ForegroundColor Cyan
+Rate-LastResponse -value 0 6>&1 | Out-Null
+$last = Get-Content $liveLog -Tail 1
+Test-Result ($last -match "RATING: \+0") "neutral rating appended"
 
 # === Cleanup ===
 Remove-Item $liveLog -Force -ErrorAction SilentlyContinue

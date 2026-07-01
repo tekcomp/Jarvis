@@ -1,6 +1,22 @@
-﻿{
+{
   "mode_switch": {
-    "playful": "Switched to playful mode."
+    "playful": "Switched to playful mode.",
+    "jarvis_explicit": "Switched to jarvis mode.",
+    "assistant_explicit": "Switched to assistant mode.",
+    "assistant_substring": "Assistant mode activated."
+  },
+  "goodbye": {
+    "playful": "Haha \ud83d\ude04 See you next time!",
+    "assistant": "Goodbye! Let me know if you need anything else.",
+    "default": "Goodbye!"
+  },
+  "bare_mode_hint": "Current mode is {mode}. Try 'playful mode', 'jarvis mode', or 'assistant mode'.",
+  "time_template": "The current time is {time}.",
+  "date_template": "Today is {date}.",
+  "llm_unreachable": {
+    "playful": "My brain is taking a coffee break. Try again in a moment!",
+    "assistant": "I'm sorry, I'm having trouble reaching my language model. Please try again shortly.",
+    "default": "My language model is unreachable."
   },
   "promoted": {}
 }
