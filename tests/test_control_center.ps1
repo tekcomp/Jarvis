@@ -56,7 +56,8 @@ function Test-Result {
     if ($cond) {
         Write-Host "  PASS  $name" -ForegroundColor Green
         $script:pass++
-    } else {
+    }
+    else {
         Write-Host "  FAIL  $name" -ForegroundColor Red
         $script:fail++
     }
@@ -144,7 +145,8 @@ if (Test-Path $testCanned) {
     try {
         $canned = Get-Content $testCanned -Raw | ConvertFrom-Json
         Test-Result ($null -ne $canned.promoted) "canned_responses.json has 'promoted' key"
-    } catch {
+    }
+    catch {
         Test-Result $false "canned_responses.json is valid JSON"
     }
 }
