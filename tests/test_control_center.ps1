@@ -116,10 +116,17 @@ Export-RatingsToCsv 6>&1 | Out-Null
 Test-Result (Test-Path $testCsv) "CSV file created"
 if (Test-Path $testCsv) {
     $csv = Import-Csv $testCsv
-    Test-Result ($csv.Count -ge 4) "CSV has at least 4 rows"
+    # The fixture has 4 RATING lines but only 3 unique JARVIS lines.
+    # Each JARVIS line can only be rated once via 1:1 pairing.
+    # The 4th rating (RATING: +1 yes) is an orphan (no preceding JARVIS) and is dropped.
+    Test-Result ($csv.Count -eq 3) "CSV has 3 rows (1:1 pairing drops orphan rating)"
     Test-Result ($csv[0].PSObject.Properties.Name -contains "Rating") "CSV has Rating column"
     Test-Result ($csv[0].PSObject.Properties.Name -contains "Timestamp") "CSV has Timestamp column"
     Test-Result ($csv[0].PSObject.Properties.Name -contains "JarvisText") "CSV has JarvisText column"
+    # Check content: first row should be the +1 "time" rating.
+    Test-Result ($csv[0].Rating -eq "1") "first row rating=1"
+    Test-Result ($csv[1].Rating -eq "2") "second row rating=2 (joke)"
+    Test-Result ($csv[2].Rating -eq "-1") "third row rating=-1"
 }
 
 # === Test 8: Promote-TopRated ===
