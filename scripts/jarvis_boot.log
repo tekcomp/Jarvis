@@ -206,3 +206,39 @@
 [2026-06-30 20:09:33] JARVIS READY SYSTEM ONLINE
 [2026-06-30 20:09:33] Launching Jarvis AUDIO agent (alive_kernel) with gemma3:latest
 [2026-06-30 20:09:33] Python: C:\Users\Mewlb\App\Python\Python311\python.exe
+[2026-06-30 21:26:09] Boot sequence started
+[2026-06-30 21:26:09] Ollama running (PID 28180)
+[2026-06-30 21:26:12] Port 11434 is open OK
+[2026-06-30 21:26:12] API responding OK
+[2026-06-30 21:26:12] Model selected: gemma3:latest
+[2026-06-30 21:26:17] Model warmup successful
+[2026-06-30 21:26:17] JARVIS READY SYSTEM ONLINE
+[2026-06-30 21:26:17] Launching Jarvis AUDIO agent (alive_kernel) with gemma3:latest
+[2026-06-30 21:26:17] Python: C:\Users\Mewlb\App\Python\Python311\python.exe
+[2026-06-30 23:09:27] Boot sequence started
+[2026-06-30 23:09:27] Ollama running (PID 28180)
+[2026-06-30 23:09:30] Port 11434 is open OK
+[2026-06-30 23:09:30] API responding OK
+[2026-06-30 23:09:30] Model selected: gemma3:latest
+[2026-06-30 23:09:37] Model warmup successful
+[2026-06-30 23:09:37] JARVIS READY SYSTEM ONLINE
+[2026-06-30 23:09:37] Launching Jarvis AUDIO agent (alive_kernel) with gemma3:latest
+[2026-06-30 23:09:37] Python: C:\Users\Mewlb\App\Python\Python311\python.exe
+[2026-06-30 23:27:34] Boot sequence started
+[2026-06-30 23:27:34] Ollama running (PID 28180)
+[2026-06-30 23:27:36] Port 11434 is open OK
+[2026-06-30 23:27:36] API responding OK
+[2026-06-30 23:27:36] Model selected: gemma3:latest
+[2026-06-30 23:27:43] Model warmup successful
+[2026-06-30 23:27:43] JARVIS READY SYSTEM ONLINE
+[2026-06-30 23:27:43] Launching Jarvis AUDIO agent (alive_kernel) with gemma3:latest
+[2026-06-30 23:27:43] Python: C:\Users\Mewlb\App\Python\Python311\python.exe
+[2026-06-30 23:42:24] Boot sequence started
+[2026-06-30 23:42:24] Ollama running (PID 28180)
+[2026-06-30 23:42:26] Port 11434 is open OK
+[2026-06-30 23:42:26] API responding OK
+[2026-06-30 23:42:26] Model selected: gemma3:latest
+[2026-06-30 23:42:33] Model warmup successful
+[2026-06-30 23:42:33] JARVIS READY SYSTEM ONLINE
+[2026-06-30 23:42:33] Launching Jarvis AUDIO agent (alive_kernel) with gemma3:latest
+[2026-06-30 23:42:33] Python: C:\Users\Mewlb\App\Python\Python311\python.exe

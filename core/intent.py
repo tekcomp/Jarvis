@@ -36,6 +36,25 @@ INTENTS = {
 }
 
 
+#----------------------------
+# HANDLE QUERY
+#----------------------------
+
+def handle_query(text: str) -> str:
+    t = text.lower()
+
+    if "show logs" in t or "jarvis logs" in t:
+        try:
+            with open("logs/jarvis.log", "r") as f:
+                last_lines = f.readlines()[-20:]
+            return "Here are the latest Jarvis logs:\n" + "".join(last_lines)
+        except Exception:
+            return "I couldn't access the logs. Make sure the log file exists."
+
+    ...
+
+
+
 # ----------------------------
 # CLEAN INPUT
 # ----------------------------

@@ -1,0 +1,1 @@
+        self.last_processed = ''

@@ -1,7 +1,8 @@
 {
   // === Python Environment & Analysis ===
   "python.analysis.extraPaths": [
-    "."
+    ".",
+    "./core"
   ],
   "python.analysis.autoSearchPaths": true,
   "python.formatting.provider": "ruff",
