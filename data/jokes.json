@@ -1,13 +1,46 @@
-{
+﻿{
     "jarvis": [
-        "Why did the AI cross the road? To optimize the reward function.",
+        {
+            "text": "Why did the AI cross the road? To optimize the reward function.",
+            "topics": [
+                "ai",
+                "tech"
+            ],
+            "tone": [
+                "nerdy",
+                "dry"
+            ],
+            "time_fit": [
+                "morning",
+                "lunch"
+            ],
+            "bank": "jarvis"
+        },
         "I told a joke about UDP. I don't know if you got it.",
         "My favorite kind of humor? Dry. Like my firmware updates.",
         "I would tell you a joke about recursion, but you'd have to understand it first.",
         "Why don't scientists trust atoms? I have the same answer. It's the same as everyone else's."
     ],
     "genx": [
-        "I had to walk uphill both ways to hear a modem scream. We turned that into a personality.",
+        {
+            "text": "I had to walk uphill both ways to hear a modem scream. We turned that into a personality.",
+            "topics": [
+                "tech",
+                "retro"
+            ],
+            "tone": [
+                "dry",
+                "wry"
+            ],
+            "time_fit": [
+                "evening"
+            ],
+            "dow": [
+                "fri",
+                "sat"
+            ],
+            "bank": "genx"
+        },
         "My mixtape had a personality disorder. Side A was sad, Side B was also sad but with synthesizers.",
         "We didn't have streaming. We had a TV and a parent who said 'find something to do'.",
         "I miss the days when the most stressful thing was a busy signal.",
@@ -19,7 +52,22 @@
         "My first crush was a singer on a cassette single. I never learned her last name."
     ],
     "millennial": [
-        "I can't afford to buy a house, but at least my podcast subscription is on autopay.",
+        {
+            "text": "I can't afford to buy a house, but at least my podcast subscription is on autopay.",
+            "topics": [
+                "money",
+                "adulting"
+            ],
+            "tone": [
+                "self-deprecating",
+                "dry"
+            ],
+            "time_fit": [
+                "evening",
+                "night"
+            ],
+            "bank": "millennial"
+        },
         "My therapist hears more from me than my parents ever did.",
         "I have a degree, three roommates, and a plant I'm emotionally attached to.",
         "I'm not procrastinating, I'm just letting my motivation marinate.",
@@ -31,7 +79,29 @@
         "I have a savings account. It has $47 in it and a dream."
     ],
     "boomer": [
-        "I walked to school in the snow, uphill both ways, and we liked it. We also liked silence.",
+        {
+            "text": "I walked to school in the snow, uphill both ways, and we liked it. We also liked silence.",
+            "topics": [
+                "retro",
+                "weather"
+            ],
+            "tone": [
+                "wry",
+                "dry"
+            ],
+            "time_fit": [
+                "morning",
+                "afternoon"
+            ],
+            "dow": [
+                "mon",
+                "tue",
+                "wed",
+                "thu",
+                "fri"
+            ],
+            "bank": "boomer"
+        },
         "In my day, we had three TV channels and we watched all of them. Out of respect.",
         "I have a flip phone, a landline, and a VCR. Two of those are still in use.",
         "My retirement plan is the pension. I earned it by being bored for forty years.",
@@ -43,7 +113,23 @@
         "I have a New Year's resolution every year. It's to keep my New Year's resolution. I am twelve for twelve."
     ],
     "genz": [
-        "It's not a phase, mom. It's a personality I monetized on TikTok.",
+        {
+            "text": "It's not a phase, mom. It's a personality I monetized on TikTok.",
+            "topics": [
+                "social",
+                "tech"
+            ],
+            "tone": [
+                "sardonic",
+                "edgy"
+            ],
+            "time_fit": [
+                "afternoon",
+                "evening",
+                "night"
+            ],
+            "bank": "genz"
+        },
         "I can't even. I literally cannot even. I am out of evens.",
         "I have seven side hustles, two podcasts, and zero savings. The vibes are immaculate.",
         "I was diagnosed with a vibe disorder. The treatment is posting about it.",
@@ -55,7 +141,25 @@
         "I have a parasocial relationship with my barista. He knows my order. I don't know his name."
     ],
     "dad": [
-        "I'm on a seafood diet. I see food and I eat it.",
+        {
+            "text": "I'm on a seafood diet. I see food and I eat it.",
+            "topics": [
+                "food",
+                "pun"
+            ],
+            "tone": [
+                "cheesy",
+                "silly"
+            ],
+            "time_fit": [
+                "lunch",
+                "afternoon"
+            ],
+            "dow": [
+                "sun"
+            ],
+            "bank": "dad"
+        },
         "I used to hate facial hair, but then it grew on me.",
         "Why don't scientists trust atoms? Because they make up everything.",
         "I told my computer I needed a break, and it said 'no problem, I'll go to sleep'.",

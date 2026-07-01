@@ -116,6 +116,80 @@ _PLAYFUL_JOKES = (
 )
 
 # =========================================================
+# SESSION-AWARE HUMOR
+# =========================================================
+# Score each candidate joke against the current session context and pick
+# the best. Anti-repeat ring blocks the last N jokes. LRU tie-break keeps
+# the pool fresh. Optional `topics` / `tone` / `time_fit` fields on each
+# joke are treated as neutral when missing, so this stays backward-
+# compatible with the existing jokes.json (plain strings score 0).
+from collections import deque as _deque
+import time as _time_humor
+
+_ANTI_REPEAT_WINDOW = 8
+_RECENT_JOKES: "_deque[str]" = _deque(maxlen=_ANTI_REPEAT_WINDOW)
+_LAST_USED: dict = {}  # joke text -> monotonic ts for LRU nudge
+
+
+def _hour_bucket(now=None) -> str:
+    h = (now or _time_humor.localtime()).tm_hour
+    if 5 <= h < 11:  return "morning"
+    if 11 <= h < 14: return "lunch"
+    if 14 <= h < 18: return "afternoon"
+    if 18 <= h < 22: return "evening"
+    return "night"
+
+
+def _dow(now=None) -> str:
+    return ["mon", "tue", "wed", "thu", "fri", "sat", "sun"][(now or _time_humor.localtime()).tm_wday]
+
+
+def _score_joke(entry, ctx) -> float:
+    if isinstance(entry, str):
+        text, meta = entry, {}
+    else:
+        text, meta = entry.get("text", ""), entry
+    score = 0.0
+    # Bank affinity: +1 if the joke is tagged for the current mode's bank.
+    if ctx.get("bank") and meta.get("bank") and meta["bank"] == ctx["bank"]:
+        score += 1.0
+    topics = set(meta.get("topics") or [])
+    if topics and ctx.get("recent_topics"):
+        score += 0.6 * len(topics & ctx["recent_topics"])
+    if ctx.get("hour") in (meta.get("time_fit") or []):
+        score += 0.4
+    if ctx.get("dow") in (meta.get("dow") or []):
+        score += 0.3
+    if ctx.get("mood") in (set(meta.get("tone") or [])):
+        score += 0.5
+    if text in _RECENT_JOKES:
+        score -= 5.0
+    # LRU nudge: tiny preference for jokes not picked recently. Monotonic
+    # time-since-last-pick normalized so a joke unused for 10s gets +1 nudge
+    # (comparable to a single bank-affinity bonus). Never grows unbounded.
+    last = _LAST_USED.get(text)
+    if last is not None:
+        score += min(1.0, (_time_humor.time() - last) / 10.0)
+    return score
+
+
+def _pick_joke(pool, ctx) -> str:
+    best_text, best_score = None, float("-inf")
+    for entry in pool:
+        text = entry if isinstance(entry, str) else entry.get("text", "")
+        if not text:
+            continue
+        s = _score_joke(entry, ctx)
+        if s > best_score:
+            best_score, best_text = s, text
+    if best_text is None and pool:
+        best_text = random.choice(pool) if isinstance(pool[0], str) else random.choice(pool)["text"]
+    if best_text:
+        _RECENT_JOKES.append(best_text)
+        _LAST_USED[best_text] = _time_humor.time()
+    return best_text or "I've got nothing. Try again."
+
+# =========================================================
 # CONVERSATION MEMORY
 # =========================================================
 # Small ring buffer of recent user/assistant turns. Thread-safe enough for
@@ -385,9 +459,16 @@ def route_intent(text: str):
         return tpl.format(date=_dt.date.today().strftime("%A, %B %d, %Y"))
 
     if re.search(r"\bjoke\b", t):
-        if engine.mode == "playful":
-            return random.choice(_PLAYFUL_JOKES) if _PLAYFUL_JOKES else "I've got nothing. Try again."
-        return random.choice(_ALL_JOKES) if _ALL_JOKES else "I've got nothing. Try again."
+        # ctx.bank = current mode. Jokes tagged with this bank get +1.
+        ctx = {
+            "bank": engine.mode,
+            "mode": engine.mode,
+            "mood": engine.state.mood,
+            "hour": _hour_bucket(),
+            "dow": _dow(),
+        }
+        pool = _PLAYFUL_JOKES if engine.mode == "playful" else _ALL_JOKES
+        return _pick_joke(pool, ctx)
 
 
 def stream_response(text: str, system_prompt=None, context=None):
