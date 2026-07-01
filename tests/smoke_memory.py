@@ -24,4 +24,5 @@ _ = "".join(brain.stream_response("jarvis what time is it"))
 
 for q in ["jarvis memory", "jarvis what do you remember", "jarvis what did I say"]:
     out = brain.route_intent(q) or "(None)"
-    print(f"  Q: {q!r:42s} -> {out[:120]}{\"...\" if len(out) > 120 else \"\"}")
+    short = out if len(out) <= 120 else out[:117] + "..."
+    print(f"  Q: {q!r:42s} -> {short}")
