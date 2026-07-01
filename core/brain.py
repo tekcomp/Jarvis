@@ -154,6 +154,29 @@ def reset_memory() -> None:
         _MEMORY.clear()
 
 
+def get_memory_summary() -> str:
+    """Return a voice-friendly summary of the recent conversation memory.
+
+    Format: "I remember N turns. Most recent: User said '...'. I said '...'."
+    Falls back to a sensible line if memory is empty.
+    """
+    with _MEM_LOCK:
+        if not _MEMORY:
+            return "I don't have anything in memory yet. Ask me a question and I'll remember it."
+        n = len(_MEMORY)
+        # Find the last user turn and last assistant turn for the digest.
+        last_user = next((t["content"] for t in reversed(_MEMORY) if t["role"] == "user"), None)
+        last_assistant = next((t["content"] for t in reversed(_MEMORY) if t["role"] == "assistant"), None)
+    parts = [f"I have {n} turn{'s' if n != 1 else ''} in memory."]
+    if last_user:
+        snippet = last_user if len(last_user) <= 80 else last_user[:77] + "..."
+        parts.append(f"Most recent question: {snippet}.")
+    if last_assistant:
+        snippet = last_assistant if len(last_assistant) <= 80 else last_assistant[:77] + "..."
+        parts.append(f"My last reply: {snippet}.")
+    return " ".join(parts)
+
+
 # =========================================================
 # VERSION / DIAGNOSTICS
 # =========================================================
@@ -281,6 +304,9 @@ def route_intent(text: str):
     # "Jarvis mode activated." reply and never reach the version intent.
     if re.search(r"\b(version|status|about you|who are you|what are you running on|diagnostics)\b", t):
         return get_version()
+
+    if re.search(r"\b(memory|remember|recall|conversation|context|what did i say|what did you hear|what do you remember|what's in your memory|whats in your memory)\b", t):
+        return get_memory_summary()
 
     if "jarvis" in t:
         engine.mode = "jarvis"
